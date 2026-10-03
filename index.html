@@ -500,7 +500,7 @@
       }
     }
 
-    // 渲染分拣按钮（0-9 键自适应网格，均匀排布）
+    // 渲染分拣按钮（动态智能网格均匀排布）
     function renderButtons() {
       const container = document.getElementById('buttonsContainer');
       container.innerHTML = '';
@@ -514,26 +514,23 @@
         return;
       }
 
-      // 确保窗口列表有 10 个，不足 10 个则自动补齐（0-9）
-      while (windows.length < 10) {
-        const nextIdx = windows.length;
-        const nextColor = PRESET_COLORS[nextIdx % PRESET_COLORS.length];
-        windows.push({
-          id: `win-${nextIdx}`,
-          name: `新分窗 ${nextIdx}`,
-          color: nextColor,
-          items: []
-        });
-      }
-
-      // 1. 电脑端 (md 断点及以上) 保持自然流式排布
-      // 2. 手机端 (md 以下) 采用 5列 x 2行 的自适应网格，绝不重叠
       const isMobile = window.innerWidth < 768;
 
       if (isMobile) {
         const gridDiv = document.createElement('div');
-        // 5列网格，间距紧凑
-        gridDiv.className = "grid grid-cols-5 gap-1.5 w-full";
+        const count = windows.length;
+
+        // 核心：根据当前实际的窗口数量，动态决定移动端 Grid 的列数
+        if (count <= 5) {
+          // 1-5个窗口：横向平铺为 1 行
+          gridDiv.className = `grid gap-1.5 w-full`;
+          gridDiv.style.gridTemplateColumns = `repeat(${count}, minmax(0, 1fr))`;
+        } else {
+          // 6-10个窗口：均匀排布为 2 行
+          const cols = Math.ceil(count / 2);
+          gridDiv.className = `grid gap-1.5 w-full`;
+          gridDiv.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+        }
 
         windows.forEach((win, index) => {
           gridDiv.appendChild(createSquareButton(win, index));
@@ -571,17 +568,17 @@
       document.getElementById('indicatorText').innerText = `待分拣: [${firstSource}] ${firstInfo.displaySender} - ${firstInfo.displayContent}`;
     }
 
-    // 辅助函数：创建自适应的“微扁圆角方块”按钮，绝不重叠
+    // 辅助函数：自适应“微扁圆角方块”按钮，高度随列数自动伸缩
     function createSquareButton(win, index) {
       const btn = document.createElement('button');
-      // aspect-[1.1/1] 保证宽高比微扁，w-full 让其在 5列网格中自动平分宽度，绝不重叠
-      btn.className = `w-full aspect-[1.1/1] rounded-xl flex flex-col items-center justify-between py-1.5 px-1 transition-all active:scale-90 active:shadow-inner shadow-sm border border-transparent shrink-0 ${win.color.btn}`;
+      // py-2.5 px-1 配合 flex-col，确保按钮在列数变多、变窄时，高度能优雅自适应，绝不重叠
+      btn.className = `w-full rounded-xl flex flex-col items-center justify-between py-2.5 px-1 transition-all active:scale-90 active:shadow-inner shadow-sm border border-transparent shrink-0 ${win.color.btn}`;
       btn.onclick = () => sortItem(win.id);
       btn.innerHTML = `
         <span class="bg-black/15 px-1.5 py-0.2 rounded-full font-mono text-[8px] scale-90">
           ${index}
         </span>
-        <span class="text-[10px] font-black truncate max-w-full leading-tight">
+        <span class="text-[10px] font-black truncate max-w-full leading-tight my-1">
           ${win.name}
         </span>
         <span class="text-[8px] opacity-75 scale-90 leading-none">
