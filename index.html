@@ -2,11 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>跑团log分拣整理系统</title>
-  <script>
-    if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) { window.location.href = "mobile.html"; }
-  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -28,7 +25,7 @@
       </div>
       <div>
         <h1 class="text-sm md:text-base font-bold text-slate-900">跑团log分拣系统</h1>
-        <p class="hidden md:block text-[10px] text-slate-400">滑动窗口极速渲染 · 支持多工作表进度续传 · 队列自由拖拽 · v2.2.5</p>
+        <p class="hidden md:block text-[10px] text-slate-400">滑动窗口极速渲染 · 支持多工作表进度续传 · 队列自由拖拽 · v2.2.7</p>
       </div>
     </div>
 
@@ -83,6 +80,17 @@
           </div>
         </div>
       </div>
+
+      <!-- 新增：群聊来源动态筛选栏 -->
+      <div id="sourceFilterContainer" class="hidden shrink-0 flex items-center gap-2 mb-2 p-2 bg-slate-50 border border-slate-200/80 rounded-lg overflow-x-auto no-scrollbar">
+        <span class="text-[10px] font-bold text-slate-500 shrink-0 flex items-center gap-1">
+          <i data-lucide="filter" class="h-3 w-3"></i> 来源过滤:
+        </span>
+        <div id="sourceFilterButtons" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <!-- 动态生成群聊按钮 -->
+        </div>
+      </div>
+
       <div id="queueList" class="flex-1 flex flex-col justify-start space-y-2 bg-slate-50/50 p-2 rounded-xl border border-slate-200/60 overflow-y-auto">
         <div class="h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center">
           <i data-lucide="upload" class="h-8 w-8 mb-2 text-indigo-500/60 animate-bounce"></i>
@@ -156,6 +164,9 @@
     let groupColorMapping = {};
     let scrollInterval = null;
 
+    // 新增：记录当前所有存在的群聊来源以及它们的选中状态
+    let sourceFilterStates = {}; 
+
     function extractGroupName(filename) {
       if (!filename) return '未知来源';
       const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;
@@ -181,8 +192,10 @@
     }
 
     function getRecommendedWindow() {
-      if (queue.length === 0) return null;
-      const qq = getRowQQ(queue[0]);
+      // 推荐首行时，需要基于“当前过滤后可见的第一条”来推荐
+      const visibleQueue = getFilteredQueue();
+      if (visibleQueue.length === 0) return null;
+      const qq = getRowQQ(visibleQueue[0]);
       const recommendedWinId = qqToWindowMapping[qq];
       return recommendedWinId ? windows.find(w => w.id === recommendedWinId) || null : null;
     }
@@ -195,8 +208,75 @@
       return groupColorMapping[sourceName];
     }
 
+    // 新增：获取过滤后的待处理队列
+    function getFilteredQueue() {
+      return queue.filter(item => {
+        const source = item._来源 || '未知';
+        return sourceFilterStates[source] !== false; // 默认选中（true）
+      });
+    }
+
+    // 新增：更新并渲染群聊过滤按钮
+    function updateSourceFilters() {
+      const container = document.getElementById('sourceFilterContainer');
+      const buttonsDiv = document.getElementById('sourceFilterButtons');
+      
+      if (!isLoaded || queue.length === 0) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      // 收集当前队列中所有存在的来源
+      const currentSources = new Set();
+      queue.forEach(item => {
+        if (item._来源) currentSources.add(item._来源);
+      });
+
+      if (currentSources.size <= 1) {
+        container.classList.add('hidden'); // 只有一个来源时无需展示筛选栏
+        return;
+      }
+
+      container.classList.remove('hidden');
+
+      // 同步状态：如果新导入了来源，默认设为启用状态
+      currentSources.forEach(src => {
+        if (sourceFilterStates[src] === undefined) {
+          sourceFilterStates[src] = true;
+        }
+      });
+
+      // 渲染按钮
+      const buttonsHtml = Array.from(currentSources).map(src => {
+        const isActive = sourceFilterStates[src] !== false;
+        return `
+          <button 
+            onclick="toggleSourceFilter('${src}')" 
+            class="px-2.5 py-1 text-[10px] font-bold rounded-full border transition-all flex items-center gap-1 ${
+              isActive 
+                ? 'bg-indigo-600 border-indigo-700 text-white shadow-sm' 
+                : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-400'
+            }"
+          >
+            <span class="w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-300' : 'bg-slate-300'}"></span>
+            <span>${src}</span>
+          </button>
+        `;
+      }).join('');
+
+      buttonsDiv.innerHTML = buttonsHtml;
+    }
+
+    // 新增：切换群聊过滤状态
+    window.toggleSourceFilter = function(source) {
+      sourceFilterStates[source] = !sourceFilterStates[source];
+      updateSourceFilters();
+      renderQueue();
+    };
+
     function renderAll() {
       renderWindows();
+      updateSourceFilters(); // 更新群聊筛选栏
       renderQueue();
       renderRenameList();
       updateUndoButtonState();
@@ -351,10 +431,12 @@
       renderAll();
     }
 
-    // 【滑动渲染窗口】：仅渲染队列前 50 条，彻底消除 PC 端长列表重绘卡顿
+    // 【滑动渲染窗口】：仅渲染过滤后的前 50 条，彻底消除 PC 端长列表重绘卡顿
     function renderQueue() {
-      document.getElementById('queueCount').innerText = queue.length;
+      const filteredQueue = getFilteredQueue();
+      document.getElementById('queueCount').innerText = filteredQueue.length;
       const listContainer = document.getElementById('queueList');
+      
       if (!isLoaded) {
         listContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center"><i data-lucide="upload" class="h-8 w-8 mb-2 text-indigo-500/60 animate-bounce"></i><p class="text-xs font-medium text-slate-600">请在右上角上传表格</p></div>`;
         document.getElementById('headerInfo').classList.add('hidden');
@@ -364,18 +446,21 @@
       }
       document.getElementById('toggleRenameBtn').classList.remove('hidden');
       document.getElementById('exportQueueBtn').classList.remove('hidden');
-      if (queue.length === 0) {
-        listContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center"><i data-lucide="check-circle-2" class="h-8 w-8 mb-2 text-emerald-500"></i><p class="text-xs text-emerald-600 font-bold">所有数据分拣完毕！</p></div>`;
+      
+      if (filteredQueue.length === 0) {
+        listContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center"><i data-lucide="check-circle-2" class="h-8 w-8 mb-2 text-emerald-500"></i><p class="text-xs text-emerald-600 font-bold">无匹配的待分拣数据！</p></div>`;
         return;
       }
 
       const recommendedWin = getRecommendedWindow();
       const queueHtmlArr = [];
       
-      // 关键性能优化：只截取前 50 条进行渲染
-      const visibleQueue = queue.slice(0, 50);
+      // 关键性能优化：只截取过滤后的前 50 条进行渲染
+      const visibleQueue = filteredQueue.slice(0, 50);
 
       visibleQueue.forEach((item, i) => {
+        // 找到该项在原始 queue 数组中的真实索引
+        const realIndex = queue.findIndex(q => q.id === item.id);
         const isFirst = i === 0;
         const info = extractFields(item);
         const sourceLabel = item._来源 || '未知';
@@ -386,21 +471,21 @@
         windows.forEach((win) => {
           const isRec = isFirst && recommendedWin && recommendedWin.id === win.id;
           rowButtonsHtml += `
-            <button onclick="sortItemDirectly(event, ${i}, '${win.id}')" class="px-3 py-1.5 text-xs font-black rounded-lg border transition-all active:scale-90 ${isRec ? 'bg-indigo-600 border-indigo-700 text-white animate-pulse ring-2 ring-indigo-300' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'}">
+            <button onclick="sortItemDirectly(event, ${realIndex}, '${win.id}')" class="px-3 py-1.5 text-xs font-black rounded-lg border transition-all active:scale-90 ${isRec ? 'bg-indigo-600 border-indigo-700 text-white animate-pulse ring-2 ring-indigo-300' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'}">
               ${win.name}
             </button>
           `;
         });
 
         if (!lockedWindowId) {
-          queueHtmlArr.push(`<div class="drop-indicator" ondragover="handleIndicatorDragOver(event, this)" ondragleave="handleIndicatorDragLeave(this)" ondrop="handleIndicatorDrop(event, 'queue', ${i}, this)"></div>`);
+          queueHtmlArr.push(`<div class="drop-indicator" ondragover="handleIndicatorDragOver(event, this)" ondragleave="handleIndicatorDragLeave(this)" ondrop="handleIndicatorDrop(event, 'queue', ${realIndex}, this)"></div>`);
         }
 
         queueHtmlArr.push(`
-          <div id="queue-card-${item.id}" draggable="${!lockedWindowId}" ondragstart="handleCardDragStart(event, '${item.id}', 'queue')" ondragend="handleCardDragEnd(event)" onclick="if(event.target.tagName !== 'BUTTON' && !event.target.closest('button') && event.target.tagName !== 'INPUT') handleQueueRowClick(${i})" class="flex-none flex flex-col p-3 rounded-xl border border-slate-200/60 shadow-sm gap-2 ${hoverClass} ${groupColorClass} opacity-95 hover:opacity-100">
+          <div id="queue-card-${item.id}" draggable="${!lockedWindowId}" ondragstart="handleCardDragStart(event, '${item.id}', 'queue')" ondragend="handleCardDragEnd(event)" onclick="if(event.target.tagName !== 'BUTTON' && !event.target.closest('button') && event.target.tagName !== 'INPUT') handleQueueRowClick(${realIndex})" class="flex-none flex flex-col p-3 rounded-xl border border-slate-200/60 shadow-sm gap-2 ${hoverClass} ${groupColorClass} opacity-95 hover:opacity-100">
             <div class="flex items-center justify-between w-full">
               <div class="flex items-center space-x-2 min-w-0">
-                <span class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 bg-slate-200 text-slate-600">${i + 1}</span>
+                <span class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 bg-slate-200 text-slate-600">${realIndex + 1}</span>
                 <span class="text-[10px] font-bold text-indigo-700 bg-white/90 px-1.5 py-0.5 rounded border border-indigo-100 shrink-0">${sourceLabel}</span>
                 <span class="text-xs font-black text-slate-800 truncate max-w-[120px] md:max-w-[180px]">${info.displaySender}</span>
               </div>
@@ -408,21 +493,21 @@
             </div>
             <div class="w-full pl-7 flex justify-between items-end gap-4">
               <p class="text-sm text-slate-900 font-bold leading-relaxed break-all select-text flex-1">${info.displayContent}</p>
-              <button onclick="deleteSingleQueueItem(event, ${i})" class="p-1.5 bg-white/80 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 hover:border-rose-200 shrink-0 shadow-sm"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i></button>
+              <button onclick="deleteSingleQueueItem(event, ${realIndex})" class="p-1.5 bg-white/80 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 hover:border-rose-200 shrink-0 shadow-sm"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i></button>
             </div>
           </div>
         `);
       });
 
       if (!lockedWindowId) {
-        queueHtmlArr.push(`<div class="drop-indicator" ondragover="handleIndicatorDragOver(event, this)" ondragleave="handleIndicatorDragLeave(this)" ondrop="handleIndicatorDrop(event, 'queue', ${visibleQueue.length}, this)"></div>`);
+        queueHtmlArr.push(`<div class="drop-indicator" ondragover="handleIndicatorDragOver(event, this)" ondragleave="handleIndicatorDragLeave(this)" ondrop="handleIndicatorDrop(event, 'queue', filteredQueue.length, this)"></div>`);
       }
 
-      // 如果还有剩余未渲染的行，在底部显示一个轻量级提示
-      if (queue.length > 50) {
+      // 如果还有剩余未渲染的过滤行，在底部显示一个轻量级提示
+      if (filteredQueue.length > 50) {
         queueHtmlArr.push(`
           <div class="py-3 text-center text-xs text-slate-400 font-medium bg-slate-100/50 rounded-xl border border-dashed border-slate-200">
-            💡 仅展示前 50 条发言，剩余 <span class="font-bold text-indigo-600">${queue.length - 50}</span> 条已自动隐藏（分流后自动补充补位）
+            💡 仅展示当前过滤后前 50 条发言，剩余 <span class="font-bold text-indigo-600">${filteredQueue.length - 50}</span> 条已自动隐藏（分流后自动补充补位）
           </div>
         `);
       }
@@ -543,10 +628,17 @@
     };
 
     function sortItem(windowId) {
-      if (queue.length === 0) return;
-      const item = queue.shift();
-      const win = windows.find(w => w.id === windowId);
-      if (win) { win.items.push(item); qqToWindowMapping[getRowQQ(item)] = windowId; pushAction({ type: 'sort', windowId: windowId, item: item }); }
+      const visibleQueue = getFilteredQueue();
+      if (visibleQueue.length === 0) return;
+      const item = visibleQueue[0];
+      
+      // 从原始 queue 中移除该项
+      const realIdx = queue.findIndex(q => q.id === item.id);
+      if (realIdx !== -1) {
+        queue.splice(realIdx, 1);
+        const win = windows.find(w => w.id === windowId);
+        if (win) { win.items.push(item); qqToWindowMapping[getRowQQ(item)] = windowId; pushAction({ type: 'click_sort', windowId: windowId, item: item, originalIdx: realIdx }); }
+      }
       renderAll();
       scrollWindowToBottom(windowId);
     }
@@ -698,6 +790,9 @@
           document.getElementById('activeControls').classList.remove('hidden');
           document.getElementById('headerInfo').classList.remove('hidden');
           document.getElementById('headerInfoText').innerText = `已恢复进度！队列剩余: ${queue.length} 行`;
+          
+          // 重置过滤状态
+          sourceFilterStates = {};
           renderAll(); return;
         }
 
@@ -717,6 +812,9 @@
         document.getElementById('activeControls').classList.remove('hidden');
         document.getElementById('headerInfo').classList.remove('hidden');
         document.getElementById('headerInfoText').innerText = `已合并！累计: ${queue.length} 行`;
+        
+        // 重置过滤状态
+        sourceFilterStates = {};
         renderAll();
       } catch (error) { alert('文件读取出错: ' + error.message); }
     }
@@ -734,12 +832,13 @@
       document.getElementById('activeControls').classList.remove('hidden');
       document.getElementById('headerInfo').classList.remove('hidden');
       document.getElementById('headerInfoText').innerText = `已加载测试数据`;
+      sourceFilterStates = {};
       renderAll();
     };
 
     document.getElementById('resetBtn').onclick = () => {
       queue = []; isLoaded = false; originalHeaders = new Set(); isRenamePanelOpen = false;
-      actionHistory = []; qqToWindowMapping = {}; lockedWindowId = null; groupColorMapping = {};
+      actionHistory = []; qqToWindowMapping = {}; lockedWindowId = null; groupColorMapping = {}; sourceFilterStates = {};
       document.getElementById('renamePanel').classList.add('hidden');
       document.getElementById('lockTip').classList.add('hidden');
       windows = [
@@ -760,11 +859,11 @@
       const key = e.key;
       if (key >= '0' && key <= '9') {
         const idx = parseInt(key, 10);
-        if (idx < windows.length && queue.length > 0) sortItem(windows[idx].id);
+        if (idx < windows.length) sortItem(windows[idx].id);
       } else if (key === 'Enter') {
         e.preventDefault();
         const rec = getRecommendedWindow();
-        if (rec && queue.length > 0) sortItem(rec.id);
+        if (rec) sortItem(rec.id);
       } else if (key === '.' || key === '。') {
         e.preventDefault();
         triggerUndo();
