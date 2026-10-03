@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>跑团log分拣整理系统</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SheetJS (XLSX) CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen overflow-hidden flex flex-col">
+
+  <!-- 顶部导航栏 -->
+  <header class="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200/80 shrink-0 shadow-sm">
+    <div class="flex items-center space-x-3">
+      <div class="p-2 bg-indigo-50 rounded-lg text-indigo-600 border border-indigo-100">
+        <i data-lucide="layers" class="h-5 w-5"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-slate-900 tracking-wide">跑团log分拣整理系统</h1>
+        <p class="text-[11px] text-slate-400">支持多文件并行合并 · 精准读取 [时间 | 发送者 | 消息内容]</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <div class="flex items-center space-x-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+        <i data-lucide="keyboard" class="h-3.5 w-3.5 text-indigo-500"></i>
+        <span>按键盘 <b>1-9</b> 键可直接分拣首行</span>
+      </div>
+
+      <!-- 允许多选文件 multiple -->
+      <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple class="hidden" />
+
+      <div id="actionButtons" class="flex items-center space-x-2">
+        <button id="uploadBtn" class="flex items-center space-x-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm shadow-indigo-100">
+          <i data-lucide="upload" class="h-4 w-4"></i>
+          <span>上传表格 (支持多选)</span>
+        </button>
+        <button id="mockBtn" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium transition-all border border-slate-200">
+          加载多列测试数据
+        </button>
+      </div>
+      <div id="activeControls" class="hidden flex items-center space-x-2">
+        <button id="appendBtn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-sm font-medium transition-all border border-indigo-200">
+          <i data-lucide="plus-circle" class="h-4 w-4"></i>
+          <span>追加上传表格</span>
+        </button>
+        <button id="resetBtn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium transition-all border border-slate-200">
+          <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+          <span>重置并清空</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体工作区 -->
+  <main class="flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+    
+    <!-- 上半部分：纵向长条形分窗 -->
+    <section class="flex-1 min-h-[240px] flex flex-col bg-white border border-slate-200/80 rounded-xl p-4 shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between mb-3 shrink-0">
+        <div class="flex items-center space-x-2">
+          <span class="flex h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
+          <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">分流接收窗口 (横向排布)</h2>
+        </div>
+        <button id="addWindowBtn" class="flex items-center space-x-1 px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 text-indigo-600 rounded-md border border-slate-200 transition font-medium">
+          <i data-lucide="plus" class="h-3.5 w-3.5"></i>
+          <span>增加分窗</span>
+        </button>
+      </div>
+
+      <!-- 纵向长条形横向排布容器 -->
+      <div id="windowsContainer" class="flex-1 flex gap-3 overflow-x-auto pb-2 pr-1">
+        <!-- 动态渲染分窗 -->
+      </div>
+    </section>
+
+    <!-- 中间部分：一字排开的快捷分拣控制台 -->
+    <section class="bg-white border border-slate-200/80 rounded-xl p-3 shadow-sm shrink-0">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+          <span class="flex h-2 w-2 rounded-full bg-indigo-500"></span>
+          <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">极速分拣控制台 (支持键盘 1-9 键)</h3>
+        </div>
+        <div id="sortingIndicator" class="hidden text-[11px] text-indigo-600 flex items-center space-x-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 font-medium">
+          <i data-lucide="sparkles" class="h-3 w-3 text-indigo-500"></i>
+          <span id="indicatorText">当前待分拣：</span>
+        </div>
+      </div>
+
+      <!-- 横向一字排开的按钮 -->
+      <div id="buttonsContainer" class="flex flex-wrap gap-2">
+        <div class="w-full text-center py-2 text-slate-400 text-xs font-medium">
+          请先在右上角上传表格以启用分拣
+        </div>
+      </div>
+    </section>
+
+    <!-- 下半部分：待处理菜单 & 队列 -->
+    <section class="h-[260px] flex flex-col bg-white border border-slate-200/80 rounded-xl p-4 shadow-sm overflow-hidden shrink-0">
+      <div class="flex items-center justify-between mb-2 shrink-0">
+        <div class="flex items-center space-x-2">
+          <span class="flex h-2 w-2 rounded-full bg-slate-400"></span>
+          <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span> 行)</h2>
+        </div>
+        <div id="headerInfo" class="hidden flex items-center space-x-1.5 text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+          <i data-lucide="file-text" class="h-3 w-3 text-slate-500"></i>
+          <span id="headerInfoText">已成功加载并保留全部原始列字段</span>
+        </div>
+      </div>
+
+      <!-- 5行列表展示块 -->
+      <div id="queueList" class="flex-1 flex flex-col justify-between space-y-1.5 bg-slate-50/50 p-2.5 rounded-xl border border-slate-200/60 overflow-hidden">
+        <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
+          <i data-lucide="upload" class="h-8 w-8 mb-1 text-indigo-500/60 animate-bounce"></i>
+          <p class="text-xs font-medium text-slate-600">请在右上角上传您的 .xlsx 或 .csv 表格</p>
+          <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，系统将严格读取“时间”、“发送者”、“消息内容”列进行排序和展示</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // 颜色库
+    const PRESET_COLORS = [
+      { border: 'border-blue-200', bg: 'bg-blue-50/60', text: 'text-blue-600', btn: 'bg-blue-500 hover:bg-blue-600 text-white shadow-blue-100' },
+      { border: 'border-emerald-200', bg: 'bg-emerald-50/60', text: 'text-emerald-600', btn: 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-100' },
+      { border: 'border-purple-200', bg: 'bg-purple-50/60', text: 'text-purple-600', btn: 'bg-purple-500 hover:bg-purple-600 text-white shadow-purple-100' },
+      { border: 'border-orange-200', bg: 'bg-orange-50/60', text: 'text-orange-600', btn: 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-100' },
+      { border: 'border-pink-200', bg: 'bg-pink-50/60', text: 'text-pink-600', btn: 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-100' },
+      { border: 'border-cyan-200', bg: 'bg-cyan-50/60', text: 'text-cyan-600', btn: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-cyan-100' },
+    ];
+
+    // 模拟包含大量无关列的测试数据
+    const MOCK_COMPLEX_DATA = [
+      { id: 'mock-1', 时间: '2026-09-30T16:18:14.000Z', 发送者: '张三', 消息内容: '请问这个产品怎么收费？', 消息类型: '业务咨询', 地区: '北京', 状态: '未处理' },
+      { id: 'mock-2', 时间: '2026-09-30T16:19:05.000Z', 发送者: '李四', 消息内容: '登录时系统提示500错误。', 消息类型: '技术报错', 地区: '上海', 状态: '处理中' },
+      { id: 'mock-3', 时间: '2026-09-30T16:20:30.000Z', 发送者: '王五', 消息内容: '客服响应速度有点慢，建议改进。', 消息类型: '投诉建议', 地区: '广州', 状态: '已记录' },
+      { id: 'mock-4', 时间: '2026-09-30T16:21:45.000Z', 发送者: '赵六', 消息内容: '想要申请企业版试用。', 消息类型: '业务咨询', 地区: '深圳', 状态: '已发送' },
+      { id: 'mock-5', 时间: '2026-09-30T16:23:00.000Z', 发送者: '钱七', 消息内容: '昨天的订单需要开专票。', 消息类型: '财务开票', 地区: '杭州', 状态: '待开票' },
+    ];
+
+    // 状态管理：默认分类为 HO1, HO2, HO3, HO4, 水聊
+    let windows = [
+      { id: 'win-1', name: 'HO1', color: PRESET_COLORS[0], items: [] },
+      { id: 'win-2', name: 'HO2', color: PRESET_COLORS[1], items: [] },
+      { id: 'win-3', name: 'HO3', color: PRESET_COLORS[2], items: [] },
+      { id: 'win-4', name: 'HO4', color: PRESET_COLORS[3], items: [] },
+      { id: 'win-5', name: '水聊', color: PRESET_COLORS[4], items: [] },
+    ];
+    let queue = [];
+    let isLoaded = false;
+    let originalHeaders = new Set(); // 收集所有上传表格合并后的并集表头
+
+    // 严格提取 [时间 | 发送者 | 消息内容]
+    function extractFields(row) {
+      return {
+        displayTime: row['时间'] || '',
+        displaySender: row['发送者'] || '未知发送者',
+        displayContent: row['消息内容'] || '（无消息内容）',
+        rawTimeValue: row['时间'] ? new Date(row['时间']).getTime() : 0
+      };
+    }
+
+    function formatFullDateTime(isoString) {
+      if (!isoString) return '';
+      if (typeof isoString !== 'string') return String(isoString);
+      return isoString.includes('T') ? isoString.replace('T', ' ').split('.')[0].replace('Z', '') : isoString;
+    }
+
+    function formatOnlyTime(isoString) {
+      if (!isoString) return '';
+      if (typeof isoString !== 'string') return String(isoString);
+      return isoString.includes('T') ? isoString.split('T')[1].split('.')[0] : isoString;
+    }
+
+    // UI 渲染
+    function renderAll() {
+      renderWindows();
+      renderQueue();
+      renderButtons();
+      lucide.createIcons();
+    }
+
+    // 渲染分流窗口
+    function renderWindows() {
+      const container = document.getElementById('windowsContainer');
+      container.innerHTML = '';
+
+      windows.forEach((win, index) => {
+        const winEl = document.createElement('div');
+        winEl.className = `flex flex-col w-56 shrink-0 rounded-xl border-2 ${win.color.border} ${win.color.bg} shadow-sm overflow-hidden transition-all`;
+        
+        let itemsHtml = '';
+        if (win.items.length === 0) {
+          itemsHtml = `
+            <div class="h-full flex flex-col items-center justify-center text-slate-400 py-10">
+              <i data-lucide="file-spreadsheet" class="h-6 w-6 mb-1 opacity-40"></i>
+              <span class="text-[10px]">等待分拣</span>
+            </div>
+          `;
+        } else {
+          win.items.forEach(item => {
+            const info = extractFields(item);
+            itemsHtml += `
+              <div class="p-2 bg-white rounded-lg border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition">
+                <div class="flex justify-between text-[9px] text-slate-400 mb-0.5">
+                  <span class="font-medium text-slate-500">${info.displaySender}</span>
+                  <span class="font-mono">${formatOnlyTime(info.displayTime)}</span>
+                </div>
+                <div class="font-semibold text-[11px] text-slate-700 truncate" title="${info.displayContent}">${info.displayContent}</div>
+              </div>
+            `;
+          });
+        }
+
+        winEl.innerHTML = `
+          <div class="px-3 py-2 flex items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-sm">
+            <div class="flex items-center space-x-1.5">
+              <span class="flex items-center justify-center w-4 h-4 rounded bg-slate-200 text-slate-600 text-[10px] font-bold">
+                ${index + 1}
+              </span>
+              <input 
+                type="text" 
+                value="${win.name}" 
+                onchange="renameWindow('${win.id}', this.value)"
+                class="bg-transparent font-bold text-xs text-slate-800 focus:outline-none focus:bg-slate-50 rounded px-1 py-0.5 w-24 border border-transparent hover:border-slate-200"
+              />
+            </div>
+            <div class="flex items-center space-x-0.5">
+              <button onclick="exportWindow('${win.id}')" title="导出此窗口数据 (保留完整原始列)" class="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-emerald-600 transition">
+                <i data-lucide="download" class="h-3 w-3"></i>
+              </button>
+              <button onclick="removeWindow('${win.id}')" title="删除窗口" class="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-rose-600 transition">
+                <i data-lucide="trash-2" class="h-3 w-3"></i>
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 p-2.5 overflow-y-auto space-y-2">
+            ${itemsHtml}
+          </div>
+          <div class="px-3 py-1.5 bg-white/80 text-[10px] text-slate-500 flex justify-between border-t border-slate-200/60">
+            <span>已收集</span>
+            <span class="font-bold ${win.color.text}">${win.items.length} 行</span>
+          </div>
+        `;
+        container.appendChild(winEl);
+      });
+    }
+
+    // 渲染待处理队列
+    function renderQueue() {
+      document.getElementById('queueCount').innerText = queue.length;
+      const listContainer = document.getElementById('queueList');
+      listContainer.innerHTML = '';
+
+      if (!isLoaded) {
+        listContainer.innerHTML = `
+          <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
+            <i data-lucide="upload" class="h-8 w-8 mb-1 text-indigo-500/60 animate-bounce"></i>
+            <p class="text-xs font-medium text-slate-600">请在右上角上传您的 .xlsx 或 .csv 表格</p>
+            <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，系统将严格读取“时间”、“发送者”、“消息内容”列进行排序和展示</p>
+          </div>
+        `;
+        document.getElementById('headerInfo').classList.add('hidden');
+        document.getElementById('sortingIndicator').classList.add('hidden');
+        return;
+      }
+
+      if (queue.length === 0) {
+        listContainer.innerHTML = `
+          <div class="flex-1 flex flex-col items-center justify-center text-slate-500">
+            <i data-lucide="check-circle-2" class="h-8 w-8 mb-1 text-emerald-500"></i>
+            <p class="text-xs text-emerald-600 font-bold">所有数据分拣完毕！</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">点击上方窗口的下载图标即可导出完整的多列数据</p>
+          </div>
+        `;
+        document.getElementById('sortingIndicator').classList.add('hidden');
+        return;
+      }
+
+      // 显示首行指示器
+      document.getElementById('sortingIndicator').classList.remove('hidden');
+      const firstInfo = extractFields(queue[0]);
+      document.getElementById('indicatorText').innerText = `当前待分拣: ${firstInfo.displaySender} - ${firstInfo.displayContent}`;
+
+      // 渲染前5行
+      for (let i = 0; i < 5; i++) {
+        const item = queue[i];
+        const itemEl = document.createElement('div');
+        
+        if (!item) {
+          itemEl.className = "flex-1 border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-300 text-[10px]";
+          itemEl.innerText = "(空闲槽位)";
+        } else {
+          const isFirst = i === 0;
+          const info = extractFields(item);
+
+          itemEl.className = `flex-1 flex items-center justify-between px-4 py-1 rounded-lg border transition-all ${
+            isFirst 
+              ? 'bg-white border-indigo-300 shadow-sm ring-1 ring-indigo-100' 
+              : 'bg-white/60 border-slate-200/60 opacity-50'
+          }`;
+
+          itemEl.innerHTML = `
+            <div class="flex items-center space-x-3">
+              <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                isFirst ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
+              }">
+                ${i + 1}
+              </span>
+              <div>
+                <div class="text-[8px] text-slate-400 uppercase tracking-wider">时间</div>
+                <div class="font-mono text-xs font-medium ${isFirst ? 'text-indigo-600' : 'text-slate-500'}">
+                  ${formatFullDateTime(info.displayTime)}
+                </div>
+              </div>
+            </div>
+            <div class="w-32">
+              <div class="text-[8px] text-slate-400 uppercase tracking-wider">发送者</div>
+              <div class="text-xs font-bold text-slate-700">${info.displaySender}</div>
+            </div>
+            <div class="flex-1 max-w-xs">
+              <div class="text-[8px] text-slate-400 uppercase tracking-wider">消息内容</div>
+              <div class="text-xs text-slate-600 truncate font-semibold" title="${info.displayContent}">${info.displayContent}</div>
+            </div>
+            ${isFirst ? `
+              <span class="px-2 py-0.5 text-[9px] bg-indigo-50 text-indigo-600 border border-indigo-100 rounded font-medium animate-pulse">
+                待分拣 (按 1)
+              </span>
+            ` : ''}
+          `;
+        }
+        listContainer.appendChild(itemEl);
+      }
+    }
+
+    // 渲染分拣按钮
+    function renderButtons() {
+      const container = document.getElementById('buttonsContainer');
+      container.innerHTML = '';
+
+      if (queue.length > 0 && windows.length > 0) {
+        windows.forEach((win, index) => {
+          const btn = document.createElement('button');
+          btn.className = `flex-1 min-w-[120px] py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-between transition-all active:scale-[0.97] shadow-sm border border-transparent ${win.color.btn}`;
+          btn.onclick = () => sortItem(win.id);
+          btn.innerHTML = `
+            <span class="truncate mr-1">
+              <span class="bg-black/15 px-1.5 py-0.5 rounded mr-1.5 font-mono text-[10px]">
+                ${index + 1}
+              </span>
+              ${win.name}
+            </span>
+            <span class="bg-white/20 px-1.5 py-0.5 rounded-full text-[9px]">
+              ${win.items.length}
+            </span>
+          `;
+          container.appendChild(btn);
+        });
+      } else {
+        container.innerHTML = `
+          <div class="w-full text-center py-2 text-slate-400 text-xs font-medium">
+            ${!isLoaded ? "请先在右上角上传表格以启用分拣" : "队列已空，分拣完成！"}
+          </div>
+        `;
+      }
+    }
+
+    // 核心业务逻辑
+    function sortItem(windowId) {
+      if (queue.length === 0) return;
+      const item = queue.shift();
+      const win = windows.find(w => w.id === windowId);
+      if (win) {
+        win.items.push(item);
+      }
+      renderAll();
+    }
+
+    function renameWindow(id, newName) {
+      const win = windows.find(w => w.id === id);
+      if (win) win.name = newName;
+      renderAll();
+    }
+
+    function removeWindow(id) {
+      const win = windows.find(w => w.id === id);
+      if (win && win.items.length > 0) {
+        queue = [...queue, ...win.items];
+        // 全局重新排序
+        queue.sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
+      }
+      windows = windows.filter(w => w.id !== id);
+      renderAll();
+    }
+
+    // 增加窗口
+    document.getElementById('addWindowBtn').onclick = () => {
+      if (windows.length >= 9) {
+        alert('快捷键 1-9 最多支持 9 个分窗');
+        return;
+      }
+      const nextColor = PRESET_COLORS[windows.length % PRESET_COLORS.length];
+      windows.push({
+        id: `win-${Date.now()}`,
+        name: `新分窗 ${windows.length + 1}`,
+        color: nextColor,
+        items: []
+      });
+      renderAll();
+    };
+
+    // 导出单个分窗为具有完整列的 CSV
+    window.exportWindow = function(windowId) {
+      const win = windows.find(w => w.id === windowId);
+      if (!win || win.items.length === 0) {
+        alert('该分窗暂无数据，无法导出');
+        return;
+      }
+
+      // 获取并集表头
+      const headers = Array.from(originalHeaders);
+      
+      const csvContent = [
+        headers,
+        ...win.items.map(item => headers.map(header => {
+          const val = String(item[header] !== undefined ? item[header] : '');
+          return val.includes(',') ? `"${val}"` : val;
+        }))
+      ].map(e => e.join(",")).join("\n");
+
+      // 加上 UTF-8 BOM 字节，确保 Excel 完美识别中文不乱码
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `${win.name}_完整导出.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    // 异步读取单个文件的 Promise 封装
+    function readFileAsync(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+            resolve(jsonData);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    // 处理多文件上传与追加 (采用 Promise.all 完美同步化)
+    async function processFiles(files) {
+      if (files.length === 0) return;
+
+      try {
+        // 1. 并行读取所有文件
+        const filesDataArray = await Promise.all(Array.from(files).map(file => readFileAsync(file)));
+        
+        const newRows = [];
+        
+        // 2. 遍历解析后的数据
+        filesDataArray.forEach((jsonData, fileIndex) => {
+          if (jsonData.length > 0) {
+            // 收集表头并集
+            Object.keys(jsonData[0]).forEach(h => {
+              if (h !== 'id') originalHeaders.add(h);
+            });
+
+            // 压入行数据并打上唯一ID防冲突
+            jsonData.forEach((row, idx) => {
+              row.id = `row-${Date.now()}-${fileIndex}-${idx}`;
+              newRows.push(row);
+            });
+          }
+        });
+
+        // 3. 追加合并到全局队列
+        queue = [...queue, ...newRows];
+
+        // 4. 全局按照“时间”列进行严格升序重新排序
+        queue.sort((a, b) => {
+          return extractFields(a).rawTimeValue - extractFields(b).rawTimeValue;
+        });
+
+        isLoaded = true;
+
+        // 5. 切换 UI 状态
+        document.getElementById('actionButtons').classList.add('hidden');
+        document.getElementById('activeControls').classList.remove('hidden');
+        document.getElementById('headerInfo').classList.remove('hidden');
+        document.getElementById('headerInfoText').innerText = `已成功合并！当前队列中累计: ${queue.length} 行数据 | 包含原始列并集: ${Array.from(originalHeaders).join(', ')}`;
+
+        renderAll();
+
+      } catch (error) {
+        console.error(error);
+        alert('文件读取出错，请确保上传的是格式正确的 .xlsx 或 .csv 文件');
+      }
+    }
+
+    // 上传按钮绑定
+    const fileInput = document.getElementById('fileInput');
+    document.getElementById('uploadBtn').onclick = () => fileInput.click();
+    document.getElementById('appendBtn').onclick = () => fileInput.click();
+
+    fileInput.onchange = (event) => {
+      processFiles(event.target.files);
+      fileInput.value = ''; // 清空以允许重复上传同名文件
+    };
+
+    // 加载测试数据
+    document.getElementById('mockBtn').onclick = () => {
+      originalHeaders = new Set(Object.keys(MOCK_COMPLEX_DATA[0]));
+      queue = [...MOCK_COMPLEX_DATA].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
+      isLoaded = true;
+      windows.forEach(w => w.items = []);
+
+      document.getElementById('actionButtons').classList.add('hidden');
+      document.getElementById('activeControls').classList.remove('hidden');
+      document.getElementById('headerInfo').classList.remove('hidden');
+      document.getElementById('headerInfoText').innerText = `已加载测试数据，包含原始列: ${Array.from(originalHeaders).join(', ')}`;
+
+      renderAll();
+    };
+
+    // 重置
+    document.getElementById('resetBtn').onclick = () => {
+      queue = [];
+      isLoaded = false;
+      originalHeaders = new Set();
+      windows.forEach(w => w.items = []);
+      fileInput.value = '';
+
+      document.getElementById('actionButtons').classList.remove('hidden');
+      document.getElementById('activeControls').classList.add('hidden');
+      document.getElementById('headerInfo').classList.add('hidden');
+
+      renderAll();
+    };
+
+    // 键盘快捷键监听 1-9
+    window.addEventListener('keydown', (event) => {
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+        return;
+      }
+      const key = event.key;
+      if (key >= '1' && key <= '9') {
+        const index = parseInt(key, 10) - 1;
+        if (index < windows.length && queue.length > 0) {
+          sortItem(windows[index].id);
+        }
+      }
+    });
+
+    // 初始化渲染
+    renderAll();
+  </script>
+</body>
+</html>
