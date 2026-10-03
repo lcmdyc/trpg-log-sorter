@@ -122,15 +122,32 @@
       </div>
     </section>
 
-    <!-- 2. 中间部分：待处理队列（高度占比 35%） -->
+    <!-- 2. 中间部分：待处理队列 & 发送者重命名（高度占比 35%） -->
     <section class="flex-[4] min-h-[140px] flex flex-col bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-sm overflow-hidden shrink-0">
       <div class="flex items-center justify-between mb-1.5 shrink-0">
-        <div class="flex items-center space-x-1.5">
+        <div class="flex items-center space-x-2">
           <span class="flex h-1.5 w-1.5 rounded-full bg-slate-400"></span>
           <h2 class="text-[11px] md:text-xs font-bold text-slate-700 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span> 行)</h2>
+          
+          <!-- 初始整理：发送者重命名折叠按钮 -->
+          <button id="toggleRenameBtn" class="hidden flex items-center space-x-1 px-2 py-0.5 text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded border border-indigo-200 transition font-bold">
+            <i data-lucide="user-cog" class="h-3 w-3"></i>
+            <span>统一发送者姓名</span>
+          </button>
         </div>
-        <div id="headerInfo" class="hidden flex items-center space-x-1 text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 max-w-[60%] truncate">
+        <div id="headerInfo" class="hidden flex items-center space-x-1 text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 max-w-[40%] truncate">
           <span id="headerInfoText" class="truncate">已成功加载全部原始列字段</span>
+        </div>
+      </div>
+
+      <!-- 绝对定位/弹性展开的“重命名面板” -->
+      <div id="renamePanel" class="hidden shrink-0 bg-indigo-50/40 border border-indigo-100 rounded-xl p-2.5 mb-2 max-h-[120px] overflow-y-auto">
+        <div class="text-[10px] font-bold text-indigo-800 mb-1.5 flex items-center justify-between">
+          <span>👤 检测到以下发送者（输入新名字后点击“应用”即可全局替换）</span>
+          <span class="text-[9px] text-indigo-500 font-normal">基于 QQ 号/发送者ID 匹配</span>
+        </div>
+        <div id="renameList" class="space-y-1.5">
+          <!-- 动态渲染发送者列表 -->
         </div>
       </div>
 
@@ -176,13 +193,13 @@
       { border: 'border-cyan-200', bg: 'bg-cyan-50/60', text: 'text-cyan-600', btn: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-cyan-100' },
     ];
 
-    // 模拟日常打招呼与跑团闲聊测试数据
+    // 模拟日常打招呼与跑团闲聊测试数据 (精简版，移除了消息类型、地区、状态)
     const MOCK_COMPLEX_DATA = [
-      { id: 'mock-1', 时间: '2026-10-04T02:01:10.000Z', 发送者: '张三', 消息内容: '哈喽哈喽，大家早上好呀！', 消息类型: '日常闲聊', 地区: '北京', 状态: '在线', _来源: '群聊A' },
-      { id: 'mock-2', 时间: '2026-10-04T02:02:15.000Z', 发送者: '李四', 消息内容: '早！今天晚上有人开团吗？求带！', 消息类型: '跑团招募', 地区: '上海', 状态: '在线', _来源: '群聊A' },
-      { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '王五', 消息内容: '滴滴，有人在吗？帮我看看这个卡怎么建。', 消息类型: '车卡咨询', 地区: '广州', 状态: '忙碌', _来源: '群聊B' },
-      { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '赵六', 消息内容: '来了来了！今天我随时有空。', 消息类型: '日常闲聊', 地区: '深圳', 状态: '在线', _来源: '群聊B' },
-      { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '钱七', 消息内容: '新人报道，请多多指教~', 消息类型: '日常闲聊', 地区: '杭州', 状态: '在线', _来源: '群聊C' },
+      { id: 'mock-1', 时间: '2026-10-04T02:01:10.000Z', 发送者: '张三-HO1', 发送者QQ: '10001', 消息内容: '哈喽哈喽，大家早上好呀！', _来源: '群聊A' },
+      { id: 'mock-2', 时间: '2026-10-04T02:02:15.000Z', 发送者: '李四-HO2', 发送者QQ: '10002', 消息内容: '早！今天晚上有人开团吗？求带！', _来源: '群聊A' },
+      { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '张小三', 发送者QQ: '10001', 消息内容: '滴滴，有人在吗？帮我看看这个卡怎么建。', _来源: '群聊B' },
+      { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '赵六', 发送者QQ: '10004', 消息内容: '来了来了！今天我随时有空。', _来源: '群聊B' },
+      { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '李大四', 发送者QQ: '10002', 消息内容: '新人报道，请多多指教~', _来源: '群聊C' },
     ];
 
     // 状态管理：水聊放到第一个，对应 0 键；HO1-4 对应 1-4 键
@@ -196,6 +213,7 @@
     let queue = [];
     let isLoaded = false;
     let originalHeaders = new Set(); // 收集所有上传表格合并后的并集表头
+    let isRenamePanelOpen = false;
 
     // 拖拽状态追踪
     let draggedItemId = null;
@@ -235,6 +253,7 @@
       renderWindows();
       renderQueue();
       renderButtons();
+      renderRenameList();
       lucide.createIcons();
     }
 
@@ -425,8 +444,12 @@
           </div>
         `;
         document.getElementById('headerInfo').classList.add('hidden');
+        document.getElementById('toggleRenameBtn').classList.add('hidden');
         return;
       }
+
+      // 显示“统一发送者姓名”按钮
+      document.getElementById('toggleRenameBtn').classList.remove('hidden');
 
       if (queue.length === 0) {
         listContainer.innerHTML = `
@@ -500,6 +523,115 @@
       }
     }
 
+    // 渲染发送者重命名列表 (初始整理)
+    function renderRenameList() {
+      const panel = document.getElementById('renamePanel');
+      const list = document.getElementById('renameList');
+      list.innerHTML = '';
+
+      if (!isLoaded) {
+        panel.classList.add('hidden');
+        return;
+      }
+
+      // 提取所有发送者和QQ号的关系
+      const qqToNames = {};
+
+      // 遍历队列和所有窗口
+      const allItems = [...queue];
+      windows.forEach(w => allItems.push(...w.items));
+
+      allItems.forEach(item => {
+        const qq = item['发送者QQ'] || item['QQ'] || item['发送者id'] || item['发送者ID'] || '无QQ号';
+        const name = item['发送者'] || '未知发送者';
+        
+        if (!qqToNames[qq]) {
+          qqToNames[qq] = new Set();
+        }
+        qqToNames[qq].add(name);
+      });
+
+      const qqList = Object.keys(qqToNames);
+      if (qqList.length === 0) {
+        list.innerHTML = `<div class="text-[10px] text-slate-400">未检测到发送者QQ号或ID字段</div>`;
+        return;
+      }
+
+      qqList.forEach(qq => {
+        const namesArray = Array.from(qqToNames[qq]);
+        const namesStr = namesArray.join(' / ');
+
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between bg-white p-1.5 rounded-lg border border-indigo-100/60 shadow-sm gap-2";
+        row.innerHTML = `
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center space-x-1">
+              <span class="text-[9px] font-mono text-indigo-600 bg-indigo-50 px-1 rounded border border-indigo-100 shrink-0">QQ: ${qq}</span>
+              <span class="text-[10px] font-bold text-slate-700 truncate" title="${namesStr}">${namesStr}</span>
+            </div>
+          </div>
+          <div class="flex items-center space-x-1 shrink-0">
+            <input 
+              type="text" 
+              placeholder="新名字" 
+              id="rename-input-${qq}"
+              class="w-20 md:w-28 text-[10px] px-1.5 py-0.5 border border-slate-200 focus:outline-none focus:border-indigo-500 rounded bg-slate-50/50"
+            />
+            <button 
+              onclick="applyGlobalRename('${qq}')"
+              class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold transition"
+            >
+              应用
+            </button>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    // 执行全局重命名
+    window.applyGlobalRename = function(qq) {
+      const input = document.getElementById(`rename-input-${qq}`);
+      if (!input) return;
+      const newName = input.value.trim();
+      if (!newName) {
+        alert('请输入新名字');
+        return;
+      }
+
+      // 1. 替换待处理队列中的名字
+      queue.forEach(item => {
+        const itemQQ = item['发送者QQ'] || item['QQ'] || item['发送者id'] || item['发送者ID'] || '无QQ号';
+        if (String(itemQQ) === String(qq)) {
+          item['发送者'] = newName;
+        }
+      });
+
+      // 2. 替换所有分流窗口中的名字
+      windows.forEach(win => {
+        win.items.forEach(item => {
+          const itemQQ = item['发送者QQ'] || item['QQ'] || item['发送者id'] || item['发送者ID'] || '无QQ号';
+          if (String(itemQQ) === String(qq)) {
+            item['发送者'] = newName;
+          }
+        });
+      });
+
+      // 重新渲染
+      renderAll();
+    };
+
+    // 折叠/展开重命名面板
+    document.getElementById('toggleRenameBtn').onclick = () => {
+      isRenamePanelOpen = !isRenamePanelOpen;
+      const panel = document.getElementById('renamePanel');
+      if (isRenamePanelOpen) {
+        panel.classList.remove('hidden');
+      } else {
+        panel.classList.add('hidden');
+      }
+    };
+
     // 渲染分拣按钮（动态智能网格均匀排布）
     function renderButtons() {
       const container = document.getElementById('buttonsContainer');
@@ -520,13 +652,11 @@
         const gridDiv = document.createElement('div');
         const count = windows.length;
 
-        // 核心：根据当前实际的窗口数量，动态决定移动端 Grid 的列数
+        // 根据当前实际的窗口数量，动态决定移动端 Grid 的列数
         if (count <= 5) {
-          // 1-5个窗口：横向平铺为 1 行
           gridDiv.className = `grid gap-1.5 w-full`;
           gridDiv.style.gridTemplateColumns = `repeat(${count}, minmax(0, 1fr))`;
         } else {
-          // 6-10个窗口：均匀排布为 2 行
           const cols = Math.ceil(count / 2);
           gridDiv.className = `grid gap-1.5 w-full`;
           gridDiv.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
@@ -571,7 +701,6 @@
     // 辅助函数：自适应“微扁圆角方块”按钮，高度随列数自动伸缩
     function createSquareButton(win, index) {
       const btn = document.createElement('button');
-      // py-2.5 px-1 配合 flex-col，确保按钮在列数变多、变窄时，高度能优雅自适应，绝不重叠
       btn.className = `w-full rounded-xl flex flex-col items-center justify-between py-2.5 px-1 transition-all active:scale-90 active:shadow-inner shadow-sm border border-transparent shrink-0 ${win.color.btn}`;
       btn.onclick = () => sortItem(win.id);
       btn.innerHTML = `
@@ -759,6 +888,8 @@
       queue = [];
       isLoaded = false;
       originalHeaders = new Set();
+      isRenamePanelOpen = false;
+      document.getElementById('renamePanel').classList.add('hidden');
       // 重置时恢复水聊在首位，HO1-4在后的默认状态
       windows = [
         { id: 'win-0', name: '水聊', color: PRESET_COLORS[0], items: [] },
