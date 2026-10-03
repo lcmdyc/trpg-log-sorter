@@ -11,20 +11,15 @@
   <!-- SheetJS (XLSX) CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
-    /* 禁用移动端长按弹出菜单，提升拖拽手感 */
     * {
       -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
     }
-    
-    /* 拖拽悬停窗口样式 */
     .window-drag-over {
       background-color: rgba(99, 102, 241, 0.05) !important;
       border-color: rgba(99, 102, 241, 0.8) !important;
       border-style: dashed !important;
     }
-    
-    /* 隐形占位热区：默认高度 12px */
     .drop-indicator {
       height: 12px;
       margin-top: -6px;
@@ -35,8 +30,6 @@
       border-radius: 8px;
       background-color: transparent;
     }
-
-    /* 拖拽悬停时撑开 */
     .drop-indicator.active {
       height: 76px;
       margin-top: 4px;
@@ -44,14 +37,17 @@
       background-color: rgba(99, 102, 241, 0.04);
       border: 2px dashed rgba(99, 102, 241, 0.4);
     }
-
-    /* 隐藏滚动条但保持功能 */
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes pulse-border {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0px rgba(99, 102, 241, 0.7); }
+      50% { transform: scale(1.02); box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
     }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
+    .recommend-pulse {
+      animation: pulse-border 2s infinite;
+      border-color: #4f46e5 !important;
+      background-color: #e0e7ff !important;
+      color: #312e81 !important;
     }
   </style>
 </head>
@@ -65,7 +61,7 @@
       </div>
       <div>
         <h1 class="text-sm md:text-base font-bold text-slate-900 tracking-wide">跑团log分拣系统</h1>
-        <p class="hidden md:block text-[11px] text-slate-400">支持多文件并行合并 · 精准读取 [时间 | 发送者 | 消息内容]</p>
+        <p class="hidden md:block text-[11px] text-slate-400">支持多文件并行合并 · 行内一键分流 · 15行双翼大布局</p>
       </div>
     </div>
 
@@ -73,7 +69,7 @@
     <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar pl-2">
       <div class="hidden lg:flex items-center space-x-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shrink-0">
         <i data-lucide="keyboard" class="h-3.5 w-3.5 text-indigo-500"></i>
-        <span>按键盘 <b>0-9</b> 键可直接分拣首行</span>
+        <span>按 <b>0-9</b> 分拣首行，按 <b>Enter</b> 确认预判，按 <b>.</b> 撤回</span>
       </div>
 
       <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple class="hidden" />
@@ -88,6 +84,10 @@
         </button>
       </div>
       <div id="activeControls" class="hidden flex items-center space-x-1.5 shrink-0">
+        <button id="undoBtn" disabled class="flex items-center space-x-1 px-2.5 py-1.5 bg-white text-slate-400 rounded-lg text-xs md:text-sm font-medium transition-all border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed">
+          <i data-lucide="undo-2" class="h-3.5 w-3.5"></i>
+          <span>撤回 (.)</span>
+        </button>
         <button id="appendBtn" class="flex items-center space-x-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs md:text-sm font-medium transition-all border border-indigo-200">
           <i data-lucide="plus-circle" class="h-3.5 w-3.5"></i>
           <span>追加</span>
@@ -101,47 +101,63 @@
   </header>
 
   <!-- 主体工作区 -->
-  <main class="flex-1 flex flex-col overflow-hidden p-3 md:p-4 space-y-3 md:space-y-4">
+  <main class="flex-1 flex flex-col lg:flex-row overflow-hidden p-3 md:p-4 gap-3 md:gap-4">
     
-    <!-- 1. 上半部分：分窗接收区（高度占比 45%） -->
-    <section class="flex-[5] min-h-[180px] flex flex-col bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-sm overflow-hidden">
+    <!-- 【左侧栏】：待处理队列（占据 48%，集成行内分流按钮） -->
+    <section class="flex-[5.5] flex flex-col bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-sm overflow-hidden min-h-[350px] lg:min-h-0">
       <div class="flex items-center justify-between mb-2 shrink-0">
-        <div class="flex items-center space-x-1.5">
-          <span class="flex h-2 w-2 rounded-full bg-indigo-500"></span>
-          <h2 class="text-[11px] md:text-xs font-bold text-slate-700 uppercase tracking-wider">分流接收窗口</h2>
+        <div class="flex items-center space-x-2">
+          <span class="flex h-2 w-2 rounded-full bg-slate-400"></span>
+          <h2 class="text-xs md:text-sm font-bold text-slate-700 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span> 行)</h2>
+          <span id="lockTip" class="hidden text-[10px] bg-amber-50 text-orange-600 border border-amber-200 px-1.5 py-0.2 rounded font-bold animate-pulse">
+            🔒 锁定模式：点击行内文字区域直接送入锁定窗
+          </span>
         </div>
-        <button id="addWindowBtn" class="flex items-center space-x-1 px-2 py-0.5 text-[10px] md:text-xs bg-slate-50 hover:bg-slate-100 text-indigo-600 rounded border border-slate-200 transition font-medium">
-          <i data-lucide="plus" class="h-3 w-3"></i>
-          <span>增加分窗</span>
-        </button>
+        <div id="headerInfo" class="hidden flex items-center space-x-1 text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 max-w-[40%] truncate">
+          <span id="headerInfoText" class="truncate">已合并原始列字段</span>
+        </div>
       </div>
 
-      <!-- 横向排布容器 -->
-      <div id="windowsContainer" class="flex-1 flex gap-2.5 overflow-x-auto pb-1 pr-1">
-        <!-- 动态渲染分窗 -->
+      <!-- 15 行队列容器 -->
+      <div id="queueList" class="flex-1 flex flex-col justify-start space-y-1 bg-slate-50/50 p-2 rounded-xl border border-slate-200/60 overflow-y-auto">
+        <div class="h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center">
+          <i data-lucide="upload" class="h-8 w-8 mb-2 text-indigo-500/60 animate-bounce"></i>
+          <p class="text-xs font-medium text-slate-600">请在右上角上传表格</p>
+          <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，按时间升序重排</p>
+        </div>
       </div>
     </section>
 
-    <!-- 2. 中间部分：待处理队列 & 发送者重命名与删除（高度占比 35%） -->
-    <section class="flex-[4] min-h-[140px] flex flex-col bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-sm overflow-hidden shrink-0">
-      <div class="flex items-center justify-between mb-1.5 shrink-0">
-        <div class="flex items-center space-x-2">
-          <span class="flex h-1.5 w-1.5 rounded-full bg-slate-400"></span>
-          <h2 class="text-[11px] md:text-xs font-bold text-slate-700 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span> 行)</h2>
-          
-          <!-- 初始整理：发送者重命名与删除折叠按钮 -->
-          <button id="toggleRenameBtn" class="hidden flex items-center space-x-1 px-2 py-0.5 text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded border border-indigo-200 transition font-bold">
-            <i data-lucide="user-cog" class="h-3 w-3"></i>
-            <span>整理发送者 (改名/删除)</span>
-          </button>
+    <!-- 【右侧栏】：分窗接收区 & 改名面板（占据 4.5%） -->
+    <section class="flex-[4.5] flex flex-col gap-3 md:gap-4 overflow-hidden">
+      
+      <!-- 1. 分窗接收区 -->
+      <div class="flex-1 min-h-[220px] flex flex-col bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-sm overflow-hidden">
+        <div class="flex items-center justify-between mb-2 shrink-0">
+          <div class="flex items-center space-x-1.5">
+            <span class="flex h-2 w-2 rounded-full bg-indigo-500"></span>
+            <h2 class="text-xs md:text-sm font-bold text-slate-700 uppercase tracking-wider">分流接收窗口</h2>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button id="toggleRenameBtn" class="hidden flex items-center space-x-1 px-2 py-0.5 text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded border border-indigo-200 transition font-bold">
+              <i data-lucide="user-cog" class="h-3 w-3"></i>
+              <span>整理发送者 (改名/删除)</span>
+            </button>
+            <button id="addWindowBtn" class="flex items-center space-x-1 px-2 py-0.5 text-[10px] md:text-xs bg-slate-50 hover:bg-slate-100 text-indigo-600 rounded border border-slate-200 transition font-medium">
+              <i data-lucide="plus" class="h-3 w-3"></i>
+              <span>增加分窗</span>
+            </button>
+          </div>
         </div>
-        <div id="headerInfo" class="hidden flex items-center space-x-1 text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 max-w-[40%] truncate">
-          <span id="headerInfoText" class="truncate">已成功加载全部原始列字段</span>
+
+        <!-- 横向排布容器 -->
+        <div id="windowsContainer" class="flex-1 flex gap-2.5 overflow-x-auto pb-1 pr-1">
+          <!-- 动态渲染分窗 -->
         </div>
       </div>
 
-      <!-- 绝对定位/弹性展开的“重命名与过滤面板” -->
-      <div id="renamePanel" class="hidden shrink-0 bg-indigo-50/40 border border-indigo-100 rounded-xl p-2.5 mb-2 max-h-[120px] overflow-y-auto">
+      <!-- 2. 绝对定位/弹性展开的“重命名与过滤面板” -->
+      <div id="renamePanel" class="hidden shrink-0 bg-indigo-50/40 border border-indigo-100 rounded-xl p-2.5 max-h-[180px] overflow-y-auto shadow-inner">
         <div class="text-[10px] font-bold text-indigo-800 mb-1.5 flex items-center justify-between">
           <span>👤 发送者初始整理（支持一键改名，或点击红色垃圾桶删除该QQ全部记录）</span>
           <span class="text-[9px] text-indigo-500 font-normal">基于 QQ号/发送者ID 匹配</span>
@@ -151,41 +167,12 @@
         </div>
       </div>
 
-      <!-- 列表展示块 -->
-      <div id="queueList" class="flex-1 flex flex-col justify-between space-y-1 bg-slate-50/50 p-2 rounded-xl border border-slate-200/60 overflow-hidden">
-        <div class="flex-1 flex flex-col items-center justify-center text-slate-400 p-4 text-center">
-          <i data-lucide="upload" class="h-6 w-6 mb-1 text-indigo-500/60 animate-bounce"></i>
-          <p class="text-[11px] font-medium text-slate-600">请在右上角上传表格</p>
-          <p class="text-[9px] text-slate-400 mt-0.5">支持多文件合并，按时间升序重排</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- 3. 最下部分：极速分拣控制台 -->
-    <section class="bg-white border border-slate-200/80 rounded-xl p-3 shadow-sm shrink-0">
-      <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center space-x-1.5">
-          <span class="flex h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
-          <h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase tracking-wider">极速分拣控制台 (0-9 键自适应网格)</h3>
-        </div>
-        <div id="sortingIndicator" class="hidden text-[10px] text-indigo-600 flex items-center space-x-1 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-medium max-w-[50%] truncate">
-          <span id="indicatorText" class="truncate">当前待分拣：</span>
-        </div>
-      </div>
-
-      <!-- 按钮容器：自适应网格，绝不重叠 -->
-      <div id="buttonsContainer" class="w-full">
-        <div class="text-center py-2 text-slate-400 text-[11px] font-medium">
-          请先上传表格以启用分拣
-        </div>
-      </div>
     </section>
   </main>
 
   <script>
-    // 颜色库
     const PRESET_COLORS = [
-      { border: 'border-pink-200', bg: 'bg-pink-50/60', text: 'text-pink-600', btn: 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-100' }, // 水聊用粉色
+      { border: 'border-pink-200', bg: 'bg-pink-50/60', text: 'text-pink-600', btn: 'bg-pink-500 hover:bg-pink-600 text-white shadow-pink-100' }, 
       { border: 'border-blue-200', bg: 'bg-blue-50/60', text: 'text-blue-600', btn: 'bg-blue-500 hover:bg-blue-600 text-white shadow-blue-100' },
       { border: 'border-emerald-200', bg: 'bg-emerald-50/60', text: 'text-emerald-600', btn: 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-100' },
       { border: 'border-purple-200', bg: 'bg-purple-50/60', text: 'text-purple-600', btn: 'bg-purple-500 hover:bg-purple-600 text-white shadow-purple-100' },
@@ -193,16 +180,19 @@
       { border: 'border-cyan-200', bg: 'bg-cyan-50/60', text: 'text-cyan-600', btn: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-cyan-100' },
     ];
 
-    // 模拟日常打招呼与跑团闲聊测试数据 (精准适配“发送者QQ号”)
     const MOCK_COMPLEX_DATA = [
       { id: 'mock-1', 时间: '2026-10-04T02:01:10.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '哈喽哈喽，大家早上好呀！', _来源: '群聊A' },
       { id: 'mock-2', 时间: '2026-10-04T02:02:15.000Z', 发送者: '李四-HO2', 发送者QQ号: '10002', 消息内容: '早！今天晚上有人开团吗？求带！', _来源: '群聊A' },
       { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '张小三', 发送者QQ号: '10001', 消息内容: '滴滴，有人在吗？帮我看看这个卡怎么建。', _来源: '群聊B' },
       { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '旁观者NPC', 发送者QQ号: '99999', 消息内容: '【系统提示：请遵守群规】', _来源: '群聊B' },
       { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '李大四', 发送者QQ号: '10002', 消息内容: '新人报道，请多多指教~', _来源: '群聊C' },
+      { id: 'mock-6', 时间: '2026-10-04T02:06:10.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '我的角色卡已经做好了，KP看看？', _来源: '群聊A' },
+      { id: 'mock-7', 时间: '2026-10-04T02:07:15.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '属性是：力量 60，敏捷 70，意志 80。', _来源: '群聊A' },
+      { id: 'mock-8', 时间: '2026-10-04T02:08:00.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '技能点我全加在侦查和图书馆了。', _来源: '群聊A' },
+      { id: 'mock-9', 时间: '2026-10-04T02:09:12.000Z', 发送者: 'KP-奈亚', 发送者QQ号: '88888', 消息内容: '收到，卡没问题，准备导入。', _来源: '群聊A' },
+      { id: 'mock-10', 时间: '2026-10-04T02:10:05.000Z', 发送者: 'KP-奈亚', 发送者QQ号: '88888', 消息内容: '今晚 8 点准时开跑，请大家提前准备好骰子。', _来源: '群聊A' },
     ];
 
-    // 状态管理：水聊放到第一个，对应 0 键；HO1-4 对应 1-4 键
     let windows = [
       { id: 'win-0', name: '水聊', color: PRESET_COLORS[0], items: [] },
       { id: 'win-1', name: 'HO1', color: PRESET_COLORS[1], items: [] },
@@ -212,27 +202,24 @@
     ];
     let queue = [];
     let isLoaded = false;
-    let originalHeaders = new Set(); // 收集所有上传表格合并后的并集表头
+    let originalHeaders = new Set(); 
     let isRenamePanelOpen = false;
-
-    // 拖拽状态追踪
+    let lockedWindowId = null;
+    let qqToWindowMapping = {};
+    let actionHistory = [];
     let draggedItemId = null;
     let draggedSourceWindowId = null;
 
-    // 智能提取文件名中的群组标记
     function extractGroupName(filename) {
       if (!filename) return '未知来源';
       if (filename.startsWith('group_')) {
         const parts = filename.split('_');
-        if (parts.length > 1 && parts[1]) {
-          return parts[1]; // 提取 group_ 之后，下一个 _ 之前的内容
-        }
+        if (parts.length > 1 && parts[1]) return parts[1]; 
       }
       const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;
       return nameWithoutExt.length > 8 ? nameWithoutExt.substring(0, 8) + '...' : nameWithoutExt;
     }
 
-    // 严格提取 [时间 | 发送者 | 消息内容]
     function extractFields(row) {
       return {
         displayTime: row['时间'] || '',
@@ -242,7 +229,6 @@
       };
     }
 
-    // 兼容性提取 QQ 号/用户唯一 ID
     function getRowQQ(row) {
       return row['发送者QQ号'] || row['发送者QQ'] || row['QQ'] || row['发送者id'] || row['发送者ID'] || '无QQ号';
     }
@@ -253,25 +239,41 @@
       return isoString.includes('T') ? isoString.split('T')[1].split('.')[0] : isoString;
     }
 
-    // UI 渲染
+    function getRecommendedWindow() {
+      if (queue.length === 0) return null;
+      const firstItem = queue[0];
+      const qq = getRowQQ(firstItem);
+      const recommendedWinId = qqToWindowMapping[qq];
+      if (recommendedWinId) {
+        const win = windows.find(w => w.id === recommendedWinId);
+        return win ? win : null;
+      }
+      return null;
+    }
+
     function renderAll() {
       renderWindows();
       renderQueue();
-      renderButtons();
       renderRenameList();
+      updateUndoButtonState();
       lucide.createIcons();
     }
 
-    // 渲染分流窗口
     function renderWindows() {
       const container = document.getElementById('windowsContainer');
       container.innerHTML = '';
 
       windows.forEach((win, index) => {
         const winEl = document.createElement('div');
-        winEl.className = `flex flex-col w-48 md:w-56 shrink-0 rounded-xl border-2 ${win.color.border} ${win.color.bg} shadow-sm overflow-hidden transition-all duration-200`;
+        winEl.id = `window-box-${win.id}`;
         
-        // 绑定窗口的拖拽目标事件
+        const isLocked = lockedWindowId === win.id;
+        winEl.className = `flex flex-col w-48 md:w-56 shrink-0 rounded-xl border-2 transition-all duration-200 ${
+          isLocked 
+            ? 'border-indigo-600 bg-indigo-50/40 shadow-lg ring-2 ring-indigo-100' 
+            : `${win.color.border} ${win.color.bg} shadow-sm`
+        }`;
+        
         winEl.addEventListener('dragover', (e) => {
           e.preventDefault();
           winEl.classList.add('window-drag-over');
@@ -282,7 +284,7 @@
         winEl.addEventListener('drop', (e) => {
           e.preventDefault();
           winEl.classList.remove('window-drag-over');
-          handleCardDrop(win.id, null); // 拖拽到窗口空白处，追加到末尾
+          handleCardDrop(win.id, null);
         });
 
         let itemsHtml = '';
@@ -294,12 +296,10 @@
             </div>
           `;
         } else {
-          // 渲染列表，并在每张卡片上方渲染一个“隐形占位热区”
           win.items.forEach((item, itemIdx) => {
             const info = extractFields(item);
             const sourceLabel = item._来源 || '未知';
             
-            // 1. 隐形判定热区
             itemsHtml += `
               <div 
                 class="drop-indicator"
@@ -309,7 +309,6 @@
               ></div>
             `;
 
-            // 2. 实际卡片
             itemsHtml += `
               <div 
                 draggable="true"
@@ -329,7 +328,6 @@
             `;
           });
 
-          // 列表最底部再追加一个隐形热区，方便拖拽到最后一行下方
           itemsHtml += `
             <div 
               class="drop-indicator"
@@ -343,6 +341,13 @@
         winEl.innerHTML = `
           <div class="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-sm shrink-0">
             <div class="flex items-center space-x-1">
+              <input 
+                type="checkbox" 
+                ${isLocked ? 'checked' : ''} 
+                onchange="toggleLockWindow('${win.id}', this.checked)"
+                title="锁定此窗口"
+                class="h-3.5 w-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+              />
               <span class="flex items-center justify-center w-3.5 h-3.5 rounded bg-slate-200 text-slate-600 text-[9px] font-bold shrink-0">
                 ${index}
               </span>
@@ -350,7 +355,7 @@
                 type="text" 
                 value="${win.name}" 
                 onchange="renameWindow('${win.id}', this.value)"
-                class="bg-transparent font-bold text-[11px] md:text-xs text-slate-800 focus:outline-none focus:bg-slate-50 rounded px-0.5 py-0.5 w-16 md:w-24 border border-transparent hover:border-slate-200"
+                class="bg-transparent font-bold text-[11px] md:text-xs text-slate-800 focus:outline-none focus:bg-slate-50 rounded px-0.5 py-0.5 w-14 md:w-20 border border-transparent hover:border-slate-200"
               />
             </div>
             <div class="flex items-center space-x-0.5 shrink-0">
@@ -362,11 +367,11 @@
               </button>
             </div>
           </div>
-          <div class="flex-1 p-2 overflow-y-auto space-y-0.5">
+          <div id="window-scroll-${win.id}" class="flex-1 p-2 overflow-y-auto space-y-0.5">
             ${itemsHtml}
           </div>
           <div class="px-2.5 py-1 bg-white/80 text-[9px] md:text-[10px] text-slate-500 flex justify-between border-t border-slate-200/60 shrink-0">
-            <span>已收集</span>
+            <span>${isLocked ? '🔒 已锁定' : '已收集'}</span>
             <span class="font-bold ${win.color.text}">${win.items.length} 行</span>
           </div>
         `;
@@ -374,21 +379,30 @@
       });
     }
 
-    // 拖拽开始与结束
+    window.toggleLockWindow = function(winId, checked) {
+      if (checked) {
+        lockedWindowId = winId;
+        document.getElementById('lockTip').classList.remove('hidden');
+      } else {
+        if (lockedWindowId === winId) {
+          lockedWindowId = null;
+          document.getElementById('lockTip').classList.add('hidden');
+        }
+      }
+      renderAll();
+    };
+
     window.handleCardDragStart = function(e, itemId, sourceWinId) {
       draggedItemId = itemId;
       draggedSourceWindowId = sourceWinId;
       e.dataTransfer.effectAllowed = 'move';
-      setTimeout(() => {
-        e.target.classList.add('opacity-30');
-      }, 0);
+      setTimeout(() => { e.target.classList.add('opacity-30'); }, 0);
     };
 
     window.handleCardDragEnd = function(e) {
       e.target.classList.remove('opacity-30');
     };
 
-    // 隐形占位判定区的拖拽事件
     window.handleIndicatorDragOver = function(e, indicator) {
       e.preventDefault();
       e.stopPropagation();
@@ -406,10 +420,8 @@
       handleCardDrop(targetWinId, targetIdx);
     };
 
-    // 统一的拖放逻辑处理
     function handleCardDrop(targetWinId, targetIdx) {
       if (!draggedItemId || !draggedSourceWindowId) return;
-
       const sourceWin = windows.find(w => w.id === draggedSourceWindowId);
       const targetWin = windows.find(w => w.id === targetWinId);
       if (!sourceWin || !targetWin) return;
@@ -417,8 +429,17 @@
       const itemIdx = sourceWin.items.findIndex(item => item.id === draggedItemId);
       if (itemIdx === -1) return;
 
-      const [draggedItem] = sourceWin.items.splice(itemIdx, 1);
+      const draggedItem = sourceWin.items[itemIdx];
+      pushAction({
+        type: 'drag',
+        sourceWinId: draggedSourceWindowId,
+        targetWinId: targetWinId,
+        itemId: draggedItemId,
+        originalIdx: itemIdx,
+        targetIdx: targetIdx === null ? targetWin.items.length : targetIdx
+      });
 
+      sourceWin.items.splice(itemIdx, 1);
       if (targetIdx === null) {
         targetWin.items.push(draggedItem);
       } else {
@@ -429,12 +450,59 @@
         targetWin.items.splice(adjustedIdx, 0, draggedItem);
       }
 
+      const qq = getRowQQ(draggedItem);
+      qqToWindowMapping[qq] = targetWinId;
       draggedItemId = null;
       draggedSourceWindowId = null;
       renderAll();
+      scrollWindowToBottom(targetWinId);
     }
 
-    // 渲染待处理队列 (手机端高度自适应，保证排版不乱)
+    // 行内直接分流（支持乱序分流）
+    window.sortItemDirectly = function(e, itemIndex, windowId) {
+      e.stopPropagation(); // 阻止触发锁定模式的整行点击
+      if (itemIndex < queue.length) {
+        const item = queue.splice(itemIndex, 1)[0];
+        const win = windows.find(w => w.id === windowId);
+        if (win) {
+          win.items.push(item);
+          pushAction({
+            type: 'click_sort',
+            windowId: windowId,
+            item: item,
+            originalIdx: itemIndex
+          });
+          const qq = getRowQQ(item);
+          qqToWindowMapping[qq] = windowId;
+        }
+        renderAll();
+        scrollWindowToBottom(windowId);
+      }
+    };
+
+    // 整行点击分流（仅在锁定模式下生效）
+    window.handleQueueRowClick = function(itemIndex) {
+      if (!lockedWindowId) return;
+      if (itemIndex < queue.length) {
+        const item = queue.splice(itemIndex, 1)[0];
+        const win = windows.find(w => w.id === lockedWindowId);
+        if (win) {
+          win.items.push(item);
+          pushAction({
+            type: 'click_sort',
+            windowId: lockedWindowId,
+            item: item,
+            originalIdx: itemIndex
+          });
+          const qq = getRowQQ(item);
+          qqToWindowMapping[qq] = lockedWindowId;
+        }
+        renderAll();
+        scrollWindowToBottom(lockedWindowId);
+      }
+    };
+
+    // 渲染待处理队列 (支持 15 行，集成行内分流按钮)
     function renderQueue() {
       document.getElementById('queueCount').innerText = queue.length;
       const listContainer = document.getElementById('queueList');
@@ -442,10 +510,10 @@
 
       if (!isLoaded) {
         listContainer.innerHTML = `
-          <div class="flex-1 flex flex-col items-center justify-center text-slate-400 p-4 text-center">
-            <i data-lucide="upload" class="h-6 w-6 mb-1 text-indigo-500/60 animate-bounce"></i>
-            <p class="text-[11px] font-medium text-slate-600">请在右上角上传表格</p>
-            <p class="text-[9px] text-slate-400 mt-0.5">支持多文件合并，按时间升序重排</p>
+          <div class="h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center">
+            <i data-lucide="upload" class="h-8 w-8 mb-2 text-indigo-500/60 animate-bounce"></i>
+            <p class="text-xs font-medium text-slate-600">请在右上角上传表格</p>
+            <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，按时间升序重排</p>
           </div>
         `;
         document.getElementById('headerInfo').classList.add('hidden');
@@ -453,82 +521,99 @@
         return;
       }
 
-      // 显示“整理发送者”按钮
       document.getElementById('toggleRenameBtn').classList.remove('hidden');
 
       if (queue.length === 0) {
         listContainer.innerHTML = `
-          <div class="flex-1 flex flex-col items-center justify-center text-slate-500 p-4 text-center">
-            <i data-lucide="check-circle-2" class="h-6 w-6 mb-1 text-emerald-500"></i>
-            <p class="text-[11px] text-emerald-600 font-bold">所有数据分拣完毕！</p>
-            <p class="text-[9px] text-slate-400 mt-0.5">点击上方窗口的下载图标即可导出数据</p>
+          <div class="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center">
+            <i data-lucide="check-circle-2" class="h-8 w-8 mb-2 text-emerald-500"></i>
+            <p class="text-xs text-emerald-600 font-bold">所有数据分拣完毕！</p>
+            <p class="text-[10px] text-slate-400 mt-1">点击右侧窗口的下载图标即可导出数据</p>
           </div>
         `;
         return;
       }
 
-      // 手机端显示前 3 行，防止溢出
-      const maxLinesToShow = window.innerWidth < 768 ? 3 : 5;
+      const maxLinesToShow = window.innerWidth < 768 ? 6 : 15;
+      const recommendedWin = getRecommendedWindow();
 
       for (let i = 0; i < maxLinesToShow; i++) {
         const item = queue[i];
         const itemEl = document.createElement('div');
         
         if (!item) {
-          itemEl.className = "flex-1 border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-300 text-[9px]";
+          itemEl.className = "flex-1 min-h-[44px] border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-300 text-[10px]";
           itemEl.innerText = "(空闲槽位)";
         } else {
           const isFirst = i === 0;
           const info = extractFields(item);
           const sourceLabel = item._来源 || '未知';
+          const hoverClass = lockedWindowId ? 'hover:bg-indigo-50/40 hover:border-indigo-300 cursor-pointer active:scale-[0.99]' : '';
 
-          itemEl.className = `flex-1 flex items-center justify-between px-2.5 py-1 md:px-4 md:py-1.5 rounded-lg border transition-all ${
-            isFirst 
-              ? 'bg-white border-indigo-300 shadow-sm ring-1 ring-indigo-100' 
-              : 'bg-white/60 border-slate-200/60 opacity-50'
+          // 动态构建右侧行内分流按钮
+          let rowButtonsHtml = '';
+          windows.forEach((win, winIdx) => {
+            const isRec = isFirst && recommendedWin && recommendedWin.id === win.id;
+            // 缩写名字，如果是水聊用“水”，HO1用“H1”，其他取前两个字符
+            const shortName = win.name === '水聊' ? '水' : (win.name.startsWith('HO') ? win.name.replace('HO', 'H') : win.name.substring(0, 2));
+            
+            rowButtonsHtml += `
+              <button 
+                onclick="sortItemDirectly(event, ${i}, '${win.id}')"
+                title="分流至: ${win.name}"
+                class="px-1.5 py-1 text-[9px] font-extrabold rounded border transition-all active:scale-90 ${
+                  isRec 
+                    ? 'bg-indigo-600 border-indigo-700 text-white animate-pulse ring-1 ring-indigo-300' 
+                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                }"
+              >
+                ${shortName}
+              </button>
+            `;
+          });
+
+          itemEl.className = `flex-1 min-h-[48px] flex items-center justify-between px-2.5 py-1 rounded-lg border transition-all ${hoverClass} ${
+            isFirst ? 'bg-white border-indigo-300 shadow-sm ring-1 ring-indigo-100' : 'bg-white/60 border-slate-200/60 opacity-85'
           }`;
 
+          itemEl.onclick = () => handleQueueRowClick(i);
           itemEl.innerHTML = `
-            <div class="flex items-center space-x-1.5 w-8 md:w-16 shrink-0">
-              <span class="w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[10px] md:text-xs font-bold ${
+            <!-- 左侧：序号 -->
+            <div class="flex items-center space-x-1 shrink-0">
+              <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black ${
                 isFirst ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
               }">
                 ${i + 1}
               </span>
             </div>
             
-            <!-- 来源标记列 -->
-            <div class="w-16 md:w-32 shrink-0">
-              <div class="text-[8px] text-slate-400 uppercase tracking-wider scale-90 origin-left">来源</div>
-              <div class="text-[9px] md:text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-100 inline-block truncate max-w-[55px] md:max-w-[110px]" title="${sourceLabel}">
+            <!-- 来源 -->
+            <div class="w-12 shrink-0 ml-1">
+              <div class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-100 inline-block truncate max-w-[42px]" title="${sourceLabel}">
                 ${sourceLabel}
               </div>
             </div>
 
-            <!-- 发送者列 -->
-            <div class="w-20 md:w-40 shrink-0">
-              <div class="text-[8px] text-slate-400 uppercase tracking-wider scale-90 origin-left">发送者</div>
-              <div class="text-xs md:text-sm font-black text-slate-800 truncate max-w-[70px] md:max-w-[150px]" title="${info.displaySender}">${info.displaySender}</div>
+            <!-- 发送者 -->
+            <div class="w-16 md:w-24 shrink-0 ml-1">
+              <div class="text-xs font-black text-slate-800 truncate max-w-[58px] md:max-w-[90px]" title="${info.displaySender}">${info.displaySender}</div>
             </div>
 
-            <!-- 消息内容列 -->
-            <div class="flex-1 min-w-0 mr-2">
-              <div class="text-[8px] text-slate-400 uppercase tracking-wider scale-90 origin-left">消息内容</div>
-              <div class="text-xs md:text-sm text-slate-900 font-bold truncate" title="${info.displayContent}">${info.displayContent}</div>
+            <!-- 消息内容 -->
+            <div class="flex-1 min-w-0 mr-2 ml-1">
+              <div class="text-xs text-slate-900 font-bold truncate" title="${info.displayContent}">${info.displayContent}</div>
             </div>
 
-            ${isFirst ? `
-              <span class="hidden md:inline-block px-2 py-0.5 text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-100 rounded font-bold animate-pulse shrink-0">
-                待分拣 (按 ${0})
-              </span>
-            ` : ''}
+            <!-- 右侧：行内分拣按钮组 -->
+            <div class="flex items-center space-x-0.5 shrink-0">
+              ${rowButtonsHtml}
+            </div>
           `;
         }
         listContainer.appendChild(itemEl);
       }
     }
 
-    // 渲染发送者重命名与删除列表 (初始整理)
     function renderRenameList() {
       const panel = document.getElementById('renamePanel');
       const list = document.getElementById('renameList');
@@ -539,20 +624,14 @@
         return;
       }
 
-      // 提取所有发送者和QQ号的关系
       const qqToNames = {};
-
-      // 遍历队列和所有窗口
       const allItems = [...queue];
       windows.forEach(w => allItems.push(...w.items));
 
       allItems.forEach(item => {
         const qq = getRowQQ(item);
         const name = item['发送者'] || '未知发送者';
-        
-        if (!qqToNames[qq]) {
-          qqToNames[qq] = new Set();
-        }
+        if (!qqToNames[qq]) qqToNames[qq] = new Set();
         qqToNames[qq].add(name);
       });
 
@@ -567,7 +646,8 @@
         const namesStr = namesArray.join(' / ');
 
         const row = document.createElement('div');
-        row.className = "flex items-center justify-between bg-white p-1.5 rounded-lg border border-indigo-100/60 shadow-sm gap-2";
+        row.id = `rename-row-${qq}`;
+        row.className = "flex items-center justify-between bg-white p-1.5 rounded-lg border border-indigo-100/60 shadow-sm gap-2 transition-all duration-200";
         row.innerHTML = `
           <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-1">
@@ -576,194 +656,153 @@
             </div>
           </div>
           <div class="flex items-center space-x-1 shrink-0">
-            <input 
-              type="text" 
-              placeholder="新名字" 
-              id="rename-input-${qq}"
-              class="w-16 md:w-28 text-[10px] px-1.5 py-0.5 border border-slate-200 focus:outline-none focus:border-indigo-500 rounded bg-slate-50/50"
-            />
-            <button 
-              onclick="applyGlobalRename('${qq}')"
-              class="px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold transition"
-            >
-              改名
-            </button>
-            <!-- 新增：一键删除该 QQ 号的所有聊天记录 -->
-            <button 
-              onclick="deleteQQRecords('${qq}', '${namesStr}')"
-              title="删除该QQ的所有聊天记录"
-              class="p-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded border border-rose-200 transition"
-            >
-              <i data-lucide="trash-2" class="h-3.5 w-3.5"></i>
-            </button>
+            <input type="text" placeholder="新名字" id="rename-input-${qq}" onfocus="highlightRenameRow('${qq}', true)" onblur="highlightRenameRow('${qq}', false)" class="w-16 md:w-28 text-[10px] px-1.5 py-0.5 border border-slate-200 focus:outline-none focus:border-indigo-500 rounded bg-slate-50/50" />
+            <button onclick="applyGlobalRename('${qq}')" class="px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold transition">改名</button>
+            <button onclick="deleteQQRecords('${qq}', '${namesStr}')" class="p-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded border border-rose-200 transition"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i></button>
           </div>
         `;
         list.appendChild(row);
       });
     }
 
-    // 执行全局重命名
+    window.highlightRenameRow = function(qq, isFocused) {
+      const row = document.getElementById(`rename-row-${qq}`);
+      if (!row) return;
+      if (isFocused) {
+        row.classList.remove('bg-white', 'border-indigo-100/60', 'shadow-sm');
+        row.classList.add('bg-indigo-50/80', 'border-indigo-400', 'shadow-md', 'scale-[1.01]');
+      } else {
+        row.classList.remove('bg-indigo-50/80', 'border-indigo-400', 'shadow-md', 'scale-[1.01]');
+        row.classList.add('bg-white', 'border-indigo-100/60', 'shadow-sm');
+      }
+    };
+
     window.applyGlobalRename = function(qq) {
       const input = document.getElementById(`rename-input-${qq}`);
       if (!input) return;
       const newName = input.value.trim();
-      if (!newName) {
-        alert('请输入新名字');
-        return;
-      }
+      if (!newName) return alert('请输入新名字');
 
-      // 1. 替换待处理队列中的名字
-      queue.forEach(item => {
+      const oldNamesMap = [];
+      const recordOldName = (item) => {
         const itemQQ = getRowQQ(item);
         if (String(itemQQ) === String(qq)) {
+          oldNamesMap.push({ id: item.id, oldName: item['发送者'] });
           item['发送者'] = newName;
         }
-      });
+      };
 
-      // 2. 替换所有分流窗口中的名字
-      windows.forEach(win => {
-        win.items.forEach(item => {
-          const itemQQ = getRowQQ(item);
-          if (String(itemQQ) === String(qq)) {
-            item['发送者'] = newName;
-          }
-        });
-      });
-
-      // 重新渲染
+      queue.forEach(recordOldName);
+      windows.forEach(win => win.items.forEach(recordOldName));
+      pushAction({ type: 'rename', qq: qq, oldNamesMap: oldNamesMap });
       renderAll();
     };
 
-    // 新增：执行全局删除该 QQ 号的所有记录
     window.deleteQQRecords = function(qq, namesStr) {
-      const confirmDelete = confirm(`确定要彻底删除 QQ [${qq}] (${namesStr}) 的所有聊天记录吗？此操作不可撤销。`);
-      if (!confirmDelete) return;
+      if (!confirm(`确定要彻底删除 QQ [${qq}] (${namesStr}) 的所有聊天记录吗？此操作不可撤销。`)) return;
 
-      // 1. 过滤待处理队列
-      const beforeQueueCount = queue.length;
+      const deletedQueueItems = queue.filter(item => String(getRowQQ(item)) === String(qq));
+      const deletedWinItems = [];
+
       queue = queue.filter(item => String(getRowQQ(item)) !== String(qq));
-      const deletedFromQueue = beforeQueueCount - queue.length;
-
-      // 2. 过滤所有分流窗口
-      let deletedFromWindows = 0;
       windows.forEach(win => {
-        const beforeWinCount = win.items.length;
+        const winDeleted = win.items.filter(item => String(getRowQQ(item)) === String(qq));
+        if (winDeleted.length > 0) deletedWinItems.push({ winId: win.id, items: winDeleted });
         win.items = win.items.filter(item => String(getRowQQ(item)) !== String(qq));
-        deletedFromWindows += (beforeWinCount - win.items.length);
       });
 
-      alert(`已成功删除该 QQ 号的所有记录！\n- 待处理队列中删除: ${deletedFromQueue} 行\n- 已分流窗口中删除: ${deletedFromWindows} 行`);
-      
-      // 重新渲染
+      pushAction({ type: 'delete_qq', qq: qq, deletedQueueItems: deletedQueueItems, deletedWinItems: deletedWinItems });
+      alert(`已成功删除该 QQ 号的所有记录！`);
       renderAll();
     };
 
-    // 折叠/展开重命名面板
     document.getElementById('toggleRenameBtn').onclick = () => {
       isRenamePanelOpen = !isRenamePanelOpen;
       const panel = document.getElementById('renamePanel');
-      if (isRenamePanelOpen) {
-        panel.classList.remove('hidden');
-      } else {
-        panel.classList.add('hidden');
-      }
+      isRenamePanelOpen ? panel.classList.remove('hidden') : panel.classList.add('hidden');
     };
 
-    // 渲染分拣按钮（动态智能网格均匀排布）
-    function renderButtons() {
-      const container = document.getElementById('buttonsContainer');
-      container.innerHTML = '';
-
-      if (!isLoaded || queue.length === 0 || windows.length === 0) {
-        container.innerHTML = `
-          <div class="w-full text-center py-2 text-slate-400 text-[11px] font-medium">
-            ${!isLoaded ? "请先上传表格以启用分拣" : "队列已空，分拣完成！"}
-          </div>
-        `;
-        return;
-      }
-
-      const isMobile = window.innerWidth < 768;
-
-      if (isMobile) {
-        const gridDiv = document.createElement('div');
-        const count = windows.length;
-
-        // 根据当前实际的窗口数量，动态决定移动端 Grid 的列数
-        if (count <= 5) {
-          gridDiv.className = `grid gap-1.5 w-full`;
-          gridDiv.style.gridTemplateColumns = `repeat(${count}, minmax(0, 1fr))`;
-        } else {
-          const cols = Math.ceil(count / 2);
-          gridDiv.className = `grid gap-1.5 w-full`;
-          gridDiv.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-        }
-
-        windows.forEach((win, index) => {
-          gridDiv.appendChild(createSquareButton(win, index));
-        });
-
-        container.appendChild(gridDiv);
-      } else {
-        // 电脑端：自然横向排布
-        const flexDiv = document.createElement('div');
-        flexDiv.className = "flex flex-wrap gap-2";
-        windows.forEach((win, index) => {
-          const btn = document.createElement('button');
-          btn.className = `flex-1 min-w-[100px] py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-between transition-all active:scale-[0.97] shadow-sm border border-transparent ${win.color.btn}`;
-          btn.onclick = () => sortItem(win.id);
-          btn.innerHTML = `
-            <span class="truncate mr-1">
-              <span class="bg-black/15 px-1.5 py-0.5 rounded mr-1.5 font-mono text-[10px]">
-                ${index}
-              </span>
-              ${win.name}
-            </span>
-            <span class="bg-white/20 px-1.5 py-0.5 rounded-full text-[9px]">
-              ${win.items.length}
-            </span>
-          `;
-          flexDiv.appendChild(btn);
-        });
-        container.appendChild(flexDiv);
-      }
-
-      // 显示首行指示器
-      const firstInfo = extractFields(queue[0]);
-      const firstSource = queue[0]._来源 || '未知';
-      document.getElementById('sortingIndicator').classList.remove('hidden');
-      document.getElementById('indicatorText').innerText = `待分拣: [${firstSource}] ${firstInfo.displaySender} - ${firstInfo.displayContent}`;
-    }
-
-    // 辅助函数：自适应“微扁圆角方块”按钮，高度随列数自动伸缩
-    function createSquareButton(win, index) {
-      const btn = document.createElement('button');
-      btn.className = `w-full rounded-xl flex flex-col items-center justify-between py-2.5 px-1 transition-all active:scale-90 active:shadow-inner shadow-sm border border-transparent shrink-0 ${win.color.btn}`;
-      btn.onclick = () => sortItem(win.id);
-      btn.innerHTML = `
-        <span class="bg-black/15 px-1.5 py-0.2 rounded-full font-mono text-[8px] scale-90">
-          ${index}
-        </span>
-        <span class="text-[10px] font-black truncate max-w-full leading-tight my-1">
-          ${win.name}
-        </span>
-        <span class="text-[8px] opacity-75 scale-90 leading-none">
-          ${win.items.length}
-        </span>
-      `;
-      return btn;
-    }
-
-    // 核心业务逻辑
     function sortItem(windowId) {
       if (queue.length === 0) return;
       const item = queue.shift();
       const win = windows.find(w => w.id === windowId);
       if (win) {
         win.items.push(item);
+        qqToWindowMapping[getRowQQ(item)] = windowId;
+        pushAction({ type: 'sort', windowId: windowId, item: item });
       }
       renderAll();
+      scrollWindowToBottom(windowId);
     }
+
+    function scrollWindowToBottom(windowId) {
+      setTimeout(() => {
+        const el = document.getElementById(`window-scroll-${windowId}`);
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      }, 50);
+    }
+
+    function pushAction(action) {
+      actionHistory.push(action);
+      updateUndoButtonState();
+    }
+
+    function updateUndoButtonState() {
+      const btn = document.getElementById('undoBtn');
+      if (btn) {
+        if (actionHistory.length > 0) {
+          btn.disabled = false;
+          btn.className = "flex items-center space-x-1 px-2.5 py-1.5 bg-white text-indigo-600 rounded-lg text-xs md:text-sm font-medium transition-all border border-indigo-200 hover:bg-indigo-50";
+        } else {
+          btn.disabled = true;
+          btn.className = "flex items-center space-x-1 px-2.5 py-1.5 bg-white text-slate-400 rounded-lg text-xs md:text-sm font-medium transition-all border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed";
+        }
+      }
+    }
+
+    window.triggerUndo = function() {
+      if (actionHistory.length === 0) return;
+      const act = actionHistory.pop();
+
+      if (act.type === 'sort') {
+        const win = windows.find(w => w.id === act.windowId);
+        if (win && win.items.length > 0) queue.unshift(win.items.pop());
+      } 
+      else if (act.type === 'click_sort') {
+        const win = windows.find(w => w.id === act.windowId);
+        if (win && win.items.length > 0) queue.splice(act.originalIdx, 0, win.items.pop());
+      }
+      else if (act.type === 'drag') {
+        const sWin = windows.find(w => w.id === act.sourceWinId);
+        const tWin = windows.find(w => w.id === act.targetWinId);
+        if (sWin && tWin) {
+          const idx = tWin.items.findIndex(item => item.id === act.itemId);
+          if (idx !== -1) {
+            const [item] = tWin.items.splice(idx, 1);
+            sWin.items.splice(act.originalIdx, 0, item);
+            scrollWindowToBottom(act.sourceWinId);
+          }
+        }
+      } 
+      else if (act.type === 'rename') {
+        const restore = (item) => {
+          const match = act.oldNamesMap.find(r => r.id === item.id);
+          if (match) item['发送者'] = match.oldName;
+        };
+        queue.forEach(restore);
+        windows.forEach(w => w.items.forEach(restore));
+      } 
+      else if (act.type === 'delete_qq') {
+        queue = [...queue, ...act.deletedQueueItems].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
+        act.deletedWinItems.forEach(rec => {
+          const win = windows.find(w => w.id === rec.winId);
+          if (win) win.items = [...win.items, ...rec.items].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
+        });
+      }
+      renderAll();
+    };
+
+    document.getElementById('undoBtn').onclick = () => triggerUndo();
 
     function renameWindow(id, newName) {
       const win = windows.find(w => w.id === id);
@@ -774,58 +813,36 @@
     function removeWindow(id) {
       const win = windows.find(w => w.id === id);
       if (win && win.items.length > 0) {
-        queue = [...queue, ...win.items];
-        queue.sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
+        queue = [...queue, ...win.items].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
       }
       windows = windows.filter(w => w.id !== id);
       renderAll();
     }
 
-    // 增加窗口
     document.getElementById('addWindowBtn').onclick = () => {
-      if (windows.length >= 10) {
-        alert('快捷键 0-9 最多支持 10 个分窗');
-        return;
-      }
-      const nextColor = PRESET_COLORS[windows.length % PRESET_COLORS.length];
-      windows.push({
-        id: `win-${windows.length}`,
-        name: `新分窗 ${windows.length}`,
-        color: nextColor,
-        items: []
-      });
+      if (windows.length >= 10) return alert('最多支持 10 个分窗');
+      windows.push({ id: `win-${windows.length}`, name: `新分窗 ${windows.length}`, color: PRESET_COLORS[windows.length % PRESET_COLORS.length], items: [] });
       renderAll();
     };
 
-    // 导出单个分窗为具有完整列的 CSV
     window.exportWindow = function(windowId) {
       const win = windows.find(w => w.id === windowId);
-      if (!win || win.items.length === 0) {
-        alert('该分窗暂无数据，无法导出');
-        return;
-      }
-
+      if (!win || win.items.length === 0) return alert('该分窗暂无数据');
       const headers = Array.from(originalHeaders);
-      
-      const csvContent = [
-        headers,
-        ...win.items.map(item => headers.map(header => {
-          const val = String(item[header] !== undefined ? item[header] : '');
-          return val.includes(',') ? `"${val}"` : val;
-        }))
-      ].map(e => e.join(",")).join("\n");
+      const csvContent = [headers, ...win.items.map(item => headers.map(h => {
+        const val = String(item[h] !== undefined ? item[h] : '');
+        return val.includes(',') ? `"${val}"` : val;
+      }))].map(e => e.join(",")).join("\n");
 
       const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `${win.name}_完整导出.csv`);
+      link.href = URL.createObjectURL(blob);
+      link.download = `${win.name}_完整导出.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     };
 
-    // 异步读取单个文件的 Promise 封装
     function readFileAsync(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -833,101 +850,65 @@
           try {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
-            
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-            resolve({ data: jsonData, filename: file.name });
-          } catch (err) {
-            reject(err);
-          }
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            resolve({ data: XLSX.utils.sheet_to_json(sheet, { defval: "" }), filename: file.name });
+          } catch (err) { reject(err); }
         };
         reader.onerror = (err) => reject(err);
         reader.readAsArrayBuffer(file);
       });
-    };
+    }
 
-    // 处理多文件上传与追加
     async function processFiles(files) {
       if (files.length === 0) return;
-
       try {
-        const filesDataArray = await Promise.all(Array.from(files).map(file => readFileAsync(file)));
+        const results = await Promise.all(Array.from(files).map(file => readFileAsync(file)));
         const newRows = [];
-        
-        filesDataArray.forEach((fileResult, fileIndex) => {
-          const jsonData = fileResult.data;
-          const filename = fileResult.filename;
-          const groupMark = extractGroupName(filename);
-
-          if (jsonData.length > 0) {
-            Object.keys(jsonData[0]).forEach(h => {
-              if (h !== 'id' && h !== '_来源') originalHeaders.add(h);
-            });
+        results.forEach((res, fileIdx) => {
+          const groupMark = extractGroupName(res.filename);
+          if (res.data.length > 0) {
+            Object.keys(res.data[0]).forEach(h => { if (h !== 'id' && h !== '_来源') originalHeaders.add(h); });
             originalHeaders.add('_来源');
-
-            jsonData.forEach((row, idx) => {
-              row.id = `row-${Date.now()}-${fileIndex}-${idx}`;
+            res.data.forEach((row, idx) => {
+              row.id = `row-${Date.now()}-${fileIdx}-${idx}`;
               row._来源 = groupMark;
               newRows.push(row);
             });
           }
         });
-
-        queue = [...queue, ...newRows];
-        queue.sort((a, b) => {
-          return extractFields(a).rawTimeValue - extractFields(b).rawTimeValue;
-        });
-
+        queue = [...queue, ...newRows].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
         isLoaded = true;
-
         document.getElementById('actionButtons').classList.add('hidden');
         document.getElementById('activeControls').classList.remove('hidden');
         document.getElementById('headerInfo').classList.remove('hidden');
-        document.getElementById('headerInfoText').innerText = `已成功合并！累计: ${queue.length} 行`;
-
+        document.getElementById('headerInfoText').innerText = `已合并！累计: ${queue.length} 行`;
         renderAll();
-
-      } catch (error) {
-        console.error(error);
-        alert('文件读取出错，请确保上传的是格式正确的 .xlsx 或 .csv 文件');
-      }
+      } catch (error) { alert('文件读取出错'); }
     }
 
-    // 上传按钮绑定
     const fileInput = document.getElementById('fileInput');
     document.getElementById('uploadBtn').onclick = () => fileInput.click();
     document.getElementById('appendBtn').onclick = () => fileInput.click();
+    fileInput.onchange = (e) => { processFiles(e.target.files); fileInput.value = ''; };
 
-    fileInput.onchange = (event) => {
-      processFiles(event.target.files);
-      fileInput.value = '';
-    };
-
-    // 加载测试数据
     document.getElementById('mockBtn').onclick = () => {
       originalHeaders = new Set(Object.keys(MOCK_COMPLEX_DATA[0]));
       queue = [...MOCK_COMPLEX_DATA].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
       isLoaded = true;
       windows.forEach(w => w.items = []);
-
+      actionHistory = []; qqToWindowMapping = {};
       document.getElementById('actionButtons').classList.add('hidden');
       document.getElementById('activeControls').classList.remove('hidden');
       document.getElementById('headerInfo').classList.remove('hidden');
       document.getElementById('headerInfoText').innerText = `已加载测试数据`;
-
       renderAll();
     };
 
-    // 重置
     document.getElementById('resetBtn').onclick = () => {
-      queue = [];
-      isLoaded = false;
-      originalHeaders = new Set();
-      isRenamePanelOpen = false;
+      queue = []; isLoaded = false; originalHeaders = new Set(); isRenamePanelOpen = false;
+      actionHistory = []; qqToWindowMapping = {}; lockedWindowId = null;
       document.getElementById('renamePanel').classList.add('hidden');
-      // 重置时恢复水聊在首位，HO1-4在后的默认状态
+      document.getElementById('lockTip').classList.add('hidden');
       windows = [
         { id: 'win-0', name: '水聊', color: PRESET_COLORS[0], items: [] },
         { id: 'win-1', name: 'HO1', color: PRESET_COLORS[1], items: [] },
@@ -936,29 +917,29 @@
         { id: 'win-4', name: 'HO4', color: PRESET_COLORS[4], items: [] },
       ];
       fileInput.value = '';
-
       document.getElementById('actionButtons').classList.remove('hidden');
       document.getElementById('activeControls').classList.add('hidden');
       document.getElementById('headerInfo').classList.add('hidden');
-
       renderAll();
     };
 
-    // 键盘快捷键监听 0-9
-    window.addEventListener('keydown', (event) => {
-      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
-        return;
-      }
-      const key = event.key;
+    // 键盘快捷键监听 (已精简闭合)
+    window.addEventListener('keydown', (e) => {
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+      const key = e.key;
       if (key >= '0' && key <= '9') {
-        const index = parseInt(key, 10);
-        if (index < windows.length && queue.length > 0) {
-          sortItem(windows[index].id);
-        }
+        const idx = parseInt(key, 10);
+        if (idx < windows.length && queue.length > 0) sortItem(windows[idx].id);
+      } else if (key === 'Enter') {
+        e.preventDefault();
+        const rec = getRecommendedWindow();
+        if (rec && queue.length > 0) sortItem(rec.id);
+      } else if (key === '.' || key === '。') {
+        e.preventDefault();
+        triggerUndo();
       }
     });
 
-    // 初始化渲染
     renderAll();
   </script>
 </body>
