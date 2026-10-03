@@ -193,13 +193,13 @@
       { border: 'border-cyan-200', bg: 'bg-cyan-50/60', text: 'text-cyan-600', btn: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-cyan-100' },
     ];
 
-    // 模拟日常打招呼与跑团闲聊测试数据 (精简版，移除了消息类型、地区、状态)
+    // 模拟日常打招呼与跑团闲聊测试数据 (精准适配“发送者QQ号”)
     const MOCK_COMPLEX_DATA = [
-      { id: 'mock-1', 时间: '2026-10-04T02:01:10.000Z', 发送者: '张三-HO1', 发送者QQ: '10001', 消息内容: '哈喽哈喽，大家早上好呀！', _来源: '群聊A' },
-      { id: 'mock-2', 时间: '2026-10-04T02:02:15.000Z', 发送者: '李四-HO2', 发送者QQ: '10002', 消息内容: '早！今天晚上有人开团吗？求带！', _来源: '群聊A' },
-      { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '张小三', 发送者QQ: '10001', 消息内容: '滴滴，有人在吗？帮我看看这个卡怎么建。', _来源: '群聊B' },
-      { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '赵六', 发送者QQ: '10004', 消息内容: '来了来了！今天我随时有空。', _来源: '群聊B' },
-      { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '李大四', 发送者QQ: '10002', 消息内容: '新人报道，请多多指教~', _来源: '群聊C' },
+      { id: 'mock-1', 时间: '2026-10-04T02:01:10.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '哈喽哈喽，大家早上好呀！', _来源: '群聊A' },
+      { id: 'mock-2', 时间: '2026-10-04T02:02:15.000Z', 发送者: '李四-HO2', 发送者QQ号: '10002', 消息内容: '早！今天晚上有人开团吗？求带！', _来源: '群聊A' },
+      { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '张小三', 发送者QQ号: '10001', 消息内容: '滴滴，有人在吗？帮我看看这个卡怎么建。', _来源: '群聊B' },
+      { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '赵六', 发送者QQ号: '10004', 消息内容: '来了来了！今天我随时有空。', _来源: '群聊B' },
+      { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '李大四', 发送者QQ号: '10002', 消息内容: '新人报道，请多多指教~', _来源: '群聊C' },
     ];
 
     // 状态管理：水聊放到第一个，对应 0 键；HO1-4 对应 1-4 键
@@ -240,6 +240,11 @@
         displayContent: row['消息内容'] || '（无消息内容）',
         rawTimeValue: row['时间'] ? new Date(row['时间']).getTime() : 0
       };
+    }
+
+    // 兼容性提取 QQ 号/用户唯一 ID
+    function getRowQQ(row) {
+      return row['发送者QQ号'] || row['发送者QQ'] || row['QQ'] || row['发送者id'] || row['发送者ID'] || '无QQ号';
     }
 
     function formatOnlyTime(isoString) {
@@ -542,7 +547,7 @@
       windows.forEach(w => allItems.push(...w.items));
 
       allItems.forEach(item => {
-        const qq = item['发送者QQ'] || item['QQ'] || item['发送者id'] || item['发送者ID'] || '无QQ号';
+        const qq = getRowQQ(item);
         const name = item['发送者'] || '未知发送者';
         
         if (!qqToNames[qq]) {
@@ -601,7 +606,7 @@
 
       // 1. 替换待处理队列中的名字
       queue.forEach(item => {
-        const itemQQ = item['发送者QQ'] || item['QQ'] || item['发送者id'] || item['发送者ID'] || '无QQ号';
+        const itemQQ = getRowQQ(item);
         if (String(itemQQ) === String(qq)) {
           item['发送者'] = newName;
         }
@@ -610,7 +615,7 @@
       // 2. 替换所有分流窗口中的名字
       windows.forEach(win => {
         win.items.forEach(item => {
-          const itemQQ = item['发送者QQ'] || item['QQ'] || item['发送者id'] || item['发送者ID'] || '无QQ号';
+          const itemQQ = getRowQQ(item);
           if (String(itemQQ) === String(qq)) {
             item['发送者'] = newName;
           }
