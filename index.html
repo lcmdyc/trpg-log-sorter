@@ -76,7 +76,10 @@
       </div>
       <div>
         <h1 class="text-sm md:text-base font-bold text-slate-900 tracking-wide">跑团log分拣系统</h1>
-        <p class="hidden md:block text-[11px] text-slate-400">支持多文件并行合并 · 拖拽边缘自动滚动 · 智能插入位置锚定</p>
+        <p class="hidden md:block text-[11px] text-slate-400 flex items-center gap-1.5">
+          <span>支持多工作表进度续传 · 队列自由拖拽 · 单条极速删除</span>
+          <span class="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-mono font-bold text-[9px] border border-indigo-100">v2.2.0</span>
+        </p>
       </div>
     </div>
 
@@ -92,13 +95,17 @@
       <div id="actionButtons" class="flex items-center space-x-1.5 shrink-0">
         <button id="uploadBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs md:text-sm font-medium transition-all shadow-sm">
           <i data-lucide="upload" class="h-3.5 w-3.5"></i>
-          <span>上传表格</span>
+          <span>上传表格 / 进度文件</span>
         </button>
         <button id="mockBtn" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs md:text-sm font-medium transition-all border border-slate-200">
           测试数据
         </button>
       </div>
       <div id="activeControls" class="hidden flex items-center space-x-1.5 shrink-0">
+        <button id="saveProgressBtn" class="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs md:text-sm font-medium transition-all shadow-sm">
+          <i data-lucide="save" class="h-3.5 w-3.5"></i>
+          <span>保存进度 (Excel)</span>
+        </button>
         <button id="undoBtn" disabled class="flex items-center space-x-1 px-2.5 py-1.5 bg-white text-slate-400 rounded-lg text-xs md:text-sm font-medium transition-all border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed">
           <i data-lucide="undo-2" class="h-3.5 w-3.5"></i>
           <span>撤回 (.)</span>
@@ -128,8 +135,14 @@
             🔒 锁定模式：点击卡片空白区域直接送入锁定窗
           </span>
         </div>
-        <div id="headerInfo" class="hidden flex items-center space-x-1 text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 max-w-[40%] truncate">
-          <span id="headerInfoText" class="truncate">已合并原始列字段</span>
+        <div class="flex items-center space-x-1.5">
+          <button id="exportQueueBtn" class="hidden flex items-center space-x-1 px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-200 transition">
+            <i data-lucide="download" class="h-3 w-3"></i>
+            <span>仅导出未分拣队列</span>
+          </button>
+          <div id="headerInfo" class="hidden flex items-center space-x-1 text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 max-w-[150px] truncate">
+            <span id="headerInfoText" class="truncate">已合并原始列字段</span>
+          </div>
         </div>
       </div>
 
@@ -195,7 +208,6 @@
       { border: 'border-cyan-200', bg: 'bg-cyan-50/60', text: 'text-cyan-600', btn: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-cyan-100' },
     ];
 
-    // 专为群聊来源设计的浅色背景色系（马卡龙色系）
     const GROUP_BG_COLORS = [
       'bg-rose-50/70 border-rose-200/60',
       'bg-sky-50/70 border-sky-200/60',
@@ -235,11 +247,10 @@
     let qqToWindowMapping = {};
     let actionHistory = [];
     let draggedItemId = null;
-    let draggedSourceWindowId = null;
+    let draggedSourceWindowId = null; 
     let lastDroppedItemId = null; 
-    let groupColorMapping = {}; // 存储群聊来源与背景颜色的映射关系
+    let groupColorMapping = {}; 
 
-    // 拖拽边缘滚动定时器
     let scrollInterval = null;
 
     function extractGroupName(filename) {
@@ -283,7 +294,6 @@
       return null;
     }
 
-    // 动态获取/分配群聊背景色
     function getGroupColorClass(sourceName) {
       if (!groupColorMapping[sourceName]) {
         const assignedIndex = Object.keys(groupColorMapping).length % GROUP_BG_COLORS.length;
@@ -509,6 +519,54 @@
 
     function handleCardDrop(targetWinId, targetIdx) {
       if (!draggedItemId || !draggedSourceWindowId) return;
+
+      // 待处理队列内部拖拽排序
+      if (draggedSourceWindowId === 'queue' && targetWinId === 'queue') {
+        const fromIdx = queue.findIndex(item => item.id === draggedItemId);
+        if (fromIdx === -1) return;
+        const [draggedItem] = queue.splice(fromIdx, 1);
+        
+        let adjustedIdx = targetIdx;
+        if (targetIdx > fromIdx) adjustedIdx = targetIdx - 1;
+        queue.splice(adjustedIdx, 0, draggedItem);
+        
+        pushAction({
+          type: 'queue_reorder',
+          itemId: draggedItemId,
+          fromIdx: fromIdx,
+          toIdx: adjustedIdx
+        });
+        
+        draggedItemId = null;
+        draggedSourceWindowId = null;
+        renderAll();
+        return;
+      }
+
+      // 从分窗拖回待处理队列
+      if (draggedSourceWindowId !== 'queue' && targetWinId === 'queue') {
+        const sourceWin = windows.find(w => w.id === draggedSourceWindowId);
+        if (!sourceWin) return;
+        const fromIdx = sourceWin.items.findIndex(item => item.id === draggedItemId);
+        if (fromIdx === -1) return;
+
+        const [draggedItem] = sourceWin.items.splice(fromIdx, 1);
+        queue.splice(targetIdx, 0, draggedItem);
+
+        pushAction({
+          type: 'drag_back_to_queue',
+          sourceWinId: draggedSourceWindowId,
+          itemId: draggedItemId,
+          originalIdx: fromIdx,
+          targetIdx: targetIdx
+        });
+
+        draggedItemId = null;
+        draggedSourceWindowId = null;
+        renderAll();
+        return;
+      }
+
       const sourceWin = windows.find(w => w.id === draggedSourceWindowId);
       const targetWin = windows.find(w => w.id === targetWinId);
       if (!sourceWin || !targetWin) return;
@@ -568,6 +626,19 @@
       }
     };
 
+    window.deleteSingleQueueItem = function(e, index) {
+      e.stopPropagation();
+      if (index < queue.length) {
+        const [deletedItem] = queue.splice(index, 1);
+        pushAction({
+          type: 'delete_single',
+          item: deletedItem,
+          originalIdx: index
+        });
+        renderAll();
+      }
+    };
+
     window.handleQueueRowClick = function(itemIndex) {
       if (!lockedWindowId) return;
       if (itemIndex < queue.length) {
@@ -589,7 +660,6 @@
       }
     };
 
-    // 渲染待处理队列 (双行卡片 + 宽大防误触按钮)
     function renderQueue() {
       document.getElementById('queueCount').innerText = queue.length;
       const listContainer = document.getElementById('queueList');
@@ -605,10 +675,12 @@
         `;
         document.getElementById('headerInfo').classList.add('hidden');
         document.getElementById('toggleRenameBtn').classList.add('hidden');
+        document.getElementById('exportQueueBtn').classList.add('hidden');
         return;
       }
 
       document.getElementById('toggleRenameBtn').classList.remove('hidden');
+      document.getElementById('exportQueueBtn').classList.remove('hidden');
 
       if (queue.length === 0) {
         listContainer.innerHTML = `
@@ -629,15 +701,13 @@
         const info = extractFields(item);
         const sourceLabel = item._来源 || '未知';
         
-        // 获取群聊专属浅色背景
         const groupColorClass = getGroupColorClass(sourceLabel);
-        const hoverClass = lockedWindowId ? 'hover:bg-indigo-50/40 hover:border-indigo-300 cursor-pointer active:scale-[0.995]' : '';
+        const hoverClass = lockedWindowId ? 'hover:bg-indigo-50/40 hover:border-indigo-300 cursor-pointer active:scale-[0.995]' : 'cursor-grab active:cursor-grabbing';
 
-        // 动态构建右侧一整排宽大、间距舒适的分流按钮
         let rowButtonsHtml = '';
         windows.forEach((win) => {
           const isRec = isFirst && recommendedWin && recommendedWin.id === win.id;
-          const shortName = win.name === '水聊' ? '水聊' : win.name; // 按钮使用完整分窗名，更宽大
+          const shortName = win.name === '水聊' ? '水聊' : win.name; 
           
           rowButtonsHtml += `
             <button 
@@ -654,24 +724,34 @@
           `;
         });
 
-        // 双行卡片布局：
-        // 第一行：序号、来源标签、发送者昵称 ----------------- 右侧：宽大分流按钮组
-        // 第二行：消息内容（独占整行，大字号，加粗）
-        itemEl.className = `flex-none flex flex-col p-3 rounded-xl border transition-all gap-2 ${hoverClass} ${
-          isFirst 
-            ? 'bg-white border-indigo-400 shadow-md ring-2 ring-indigo-100/50' 
-            : `${groupColorClass} opacity-90 hover:opacity-100`
-        }`;
+        let indicatorHtml = '';
+        if (!lockedWindowId) {
+          indicatorHtml = `
+            <div 
+              class="drop-indicator"
+              ondragover="handleIndicatorDragOver(event, this)"
+              ondragleave="handleIndicatorDragLeave(this)"
+              ondrop="handleIndicatorDrop(event, 'queue', ${i}, this)"
+            ></div>
+          `;
+        }
 
+        listContainer.innerHTML += indicatorHtml;
+
+        itemEl.id = `queue-card-${item.id}`;
+        itemEl.draggable = !lockedWindowId; 
+        itemEl.ondragstart = (e) => handleCardDragStart(e, item.id, 'queue');
+        itemEl.ondragend = (e) => handleCardDragEnd(e);
+
+        itemEl.className = `flex-none flex flex-col p-3 rounded-xl border border-slate-200/60 shadow-sm transition-all gap-2 ${hoverClass} ${groupColorClass} opacity-95 hover:opacity-100`;
         itemEl.onclick = () => handleQueueRowClick(i);
+        
         itemEl.innerHTML = `
           <!-- 第一行：元数据与大按钮 -->
-          <div class="flex items-center justify-between w-full">
+          <div class="flex items-center justify-between w-full pointer-events-auto">
             <div class="flex items-center space-x-2 min-w-0">
               <!-- 序号 -->
-              <span class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
-                isFirst ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'
-              }">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 bg-slate-200 text-slate-600">
                 ${i + 1}
               </span>
               <!-- 来源 -->
@@ -690,17 +770,35 @@
             </div>
           </div>
 
-          <!-- 第二行：消息内容（独占整行，大字号） -->
-          <div class="w-full pl-7">
-            <p class="text-sm text-slate-900 font-bold leading-relaxed break-all select-text" title="${info.displayContent}">
+          <!-- 第二行：消息内容与删除按钮 -->
+          <div class="w-full pl-7 flex justify-between items-end gap-4">
+            <p class="text-sm text-slate-900 font-bold leading-relaxed break-all select-text flex-1" title="${info.displayContent}">
               ${info.displayContent}
             </p>
+            <!-- 单条删除按钮 -->
+            <button 
+              onclick="deleteSingleQueueItem(event, ${i})" 
+              title="删除此条发言" 
+              class="p-1.5 bg-white/80 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 hover:border-rose-200 transition shrink-0 shadow-sm"
+            >
+              <i data-lucide="trash-2" class="h-3.5 w-3.5"></i>
+            </button>
           </div>
         `;
         listContainer.appendChild(itemEl);
       });
-    }
 
+      if (!lockedWindowId) {
+        const endIndicator = document.createElement('div');
+        endIndicator.className = "drop-indicator";
+        endIndicator.setAttribute('ondragover', "handleIndicatorDragOver(event, this)");
+        endIndicator.setAttribute('ondragleave', "handleIndicatorDragLeave(this)");
+        endIndicator.setAttribute('ondrop', `handleIndicatorDrop(event, 'queue', ${queue.length}, this)`);
+        listContainer.appendChild(endIndicator);
+      }
+    }
+// 核心渲染逻辑到此结束，接下来请拼接第二部分...
+        // 2. 恢复发送者改名列表
     function renderRenameList() {
       const panel = document.getElementById('renamePanel');
       const list = document.getElementById('renameList');
@@ -861,6 +959,20 @@
         const win = windows.find(w => w.id === act.windowId);
         if (win && win.items.length > 0) queue.splice(act.originalIdx, 0, win.items.pop());
       }
+      else if (act.type === 'delete_single') {
+        queue.splice(act.originalIdx, 0, act.item);
+      }
+      else if (act.type === 'queue_reorder') {
+        const [item] = queue.splice(act.toIdx, 1);
+        queue.splice(act.fromIdx, 0, item);
+      }
+      else if (act.type === 'drag_back_to_queue') {
+        const win = windows.find(w => w.id === act.sourceWinId);
+        if (win) {
+          const [item] = queue.splice(act.targetIdx, 1);
+          win.items.splice(act.originalIdx, 0, item);
+        }
+      }
       else if (act.type === 'drag') {
         const sWin = windows.find(w => w.id === act.sourceWinId);
         const tWin = windows.find(w => w.id === act.targetWinId);
@@ -932,6 +1044,51 @@
       document.body.removeChild(link);
     };
 
+    document.getElementById('exportQueueBtn').onclick = () => {
+      if (queue.length === 0) return alert('待处理队列为空');
+      const headers = Array.from(originalHeaders);
+      const csvContent = [headers, ...queue.map(item => headers.map(h => {
+        const val = String(item[h] !== undefined ? item[h] : '');
+        return val.includes(',') ? `"${val}"` : val;
+      }))].map(e => e.join(",")).join("\n");
+
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `待处理队列_未分拣.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    // 保存分拣进度 (多工作表 Excel 导出)
+    document.getElementById('saveProgressBtn').onclick = () => {
+      if (!isLoaded) return alert('暂无数据可保存');
+      try {
+        const wb = XLSX.utils.book_new();
+        const headers = Array.from(originalHeaders);
+
+        const formatData = (items) => {
+          return [headers, ...items.map(item => headers.map(h => item[h] !== undefined ? item[h] : ''))];
+        };
+
+        const queueData = formatData(queue);
+        const queueWs = XLSX.utils.aoa_to_sheet(queueData);
+        XLSX.utils.book_append_sheet(wb, queueWs, "待处理队列");
+
+        windows.forEach(win => {
+          const winData = formatData(win.items);
+          const winWs = XLSX.utils.aoa_to_sheet(winData);
+          const safeSheetName = win.name.replace(/[\\\?\*\/\[\]]/g, '').substring(0, 30) || `分窗_${win.id}`;
+          XLSX.utils.book_append_sheet(wb, winWs, safeSheetName);
+        });
+
+        XLSX.writeFile(wb, `跑团分拣进度_${new Date().toISOString().split('T')[0]}.xlsx`);
+      } catch (err) {
+        alert(`保存进度失败: ${err.message}`);
+      }
+    };
+
     function readFileAsync(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -939,8 +1096,7 @@
           try {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            resolve({ data: XLSX.utils.sheet_to_json(sheet, { defval: "" }), filename: file.name });
+            resolve({ workbook, filename: file.name });
           } catch (err) { reject(err); }
         };
         reader.onerror = (err) => reject(err);
@@ -948,17 +1104,63 @@
       });
     }
 
+    // 智能识别：是新文件合并，还是进度文件恢复
     async function processFiles(files) {
       if (files.length === 0) return;
       try {
         const results = await Promise.all(Array.from(files).map(file => readFileAsync(file)));
+        
+        // 如果只上传了一个文件，且包含“待处理队列”工作表，说明是【进度恢复】
+        if (results.length === 1 && results[0].workbook.SheetNames.includes("待处理队列")) {
+          const wb = results[0].workbook;
+          
+          // 1. 恢复待处理队列
+          const queueSheet = wb.Sheets["待处理队列"];
+          queue = XLSX.utils.sheet_to_json(queueSheet, { defval: "" });
+          queue.forEach((row, idx) => {
+            if (!row.id) row.id = `row-imported-q-${idx}-${Date.now()}`;
+            Object.keys(row).forEach(h => { if (h !== 'id' && h !== '_来源') originalHeaders.add(h); });
+          });
+
+          // 2. 恢复各个分窗
+          windows = [];
+          let winIdx = 0;
+          wb.SheetNames.forEach(sheetName => {
+            if (sheetName !== "待处理队列") {
+              const sheet = wb.Sheets[sheetName];
+              const items = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+              items.forEach((row, idx) => {
+                if (!row.id) row.id = `row-imported-w-${winIdx}-${idx}-${Date.now()}`;
+              });
+              windows.push({
+                id: `win-${winIdx}`,
+                name: sheetName,
+                color: PRESET_COLORS[winIdx % PRESET_COLORS.length],
+                items: items
+              });
+              winIdx++;
+            }
+          });
+
+          isLoaded = true;
+          document.getElementById('actionButtons').classList.add('hidden');
+          document.getElementById('activeControls').classList.remove('hidden');
+          document.getElementById('headerInfo').classList.remove('hidden');
+          document.getElementById('headerInfoText').innerText = `已恢复进度！队列剩余: ${queue.length} 行`;
+          renderAll();
+          return;
+        }
+
+        // 否则，走常规的多文件合并逻辑
         const newRows = [];
         results.forEach((res, fileIdx) => {
           const groupMark = extractGroupName(res.filename);
-          if (res.data.length > 0) {
-            Object.keys(res.data[0]).forEach(h => { if (h !== 'id' && h !== '_来源') originalHeaders.add(h); });
+          const firstSheet = res.workbook.Sheets[res.workbook.SheetNames[0]];
+          const data = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+          if (data.length > 0) {
+            Object.keys(data[0]).forEach(h => { if (h !== 'id' && h !== '_来源') originalHeaders.add(h); });
             originalHeaders.add('_来源');
-            res.data.forEach((row, idx) => {
+            data.forEach((row, idx) => {
               row.id = `row-${Date.now()}-${fileIdx}-${idx}`;
               row._来源 = groupMark;
               newRows.push(row);
@@ -972,7 +1174,7 @@
         document.getElementById('headerInfo').classList.remove('hidden');
         document.getElementById('headerInfoText').innerText = `已合并！累计: ${queue.length} 行`;
         renderAll();
-      } catch (error) { alert('文件读取出错'); }
+      } catch (error) { alert('文件读取出错: ' + error.message); }
     }
 
     const fileInput = document.getElementById('fileInput');
@@ -1012,7 +1214,7 @@
       renderAll();
     };
 
-    // 键盘快捷键监听 (已精简闭合)
+    // 键盘快捷键监听
     window.addEventListener('keydown', (e) => {
       if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
       const key = e.key;
