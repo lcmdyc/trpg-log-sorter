@@ -2,229 +2,178 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <!-- 优化移动端视口，防止缩放，适配刘海屏 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  
-  <!-- 开启 iOS 与 Android WebApp 全屏模式 -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="mobile-web-app-capable" content="yes">
-  
-  <title>跑团log分拣系统 (手机横屏版)</title>
-  <!-- Tailwind CSS CDN -->
+  <title>跑团log分拣系统 - 移动端</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- SheetJS (XLSX) CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
-    /* 禁用移动端长按弹出菜单与双击缩放 */
     * {
       -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
       -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
     }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
-    /* 适合手机触控的呼吸灯 */
-    @keyframes pulse-light {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.03); opacity: 0.9; }
-    }
-    .recommend-pulse {
-      animation: pulse-light 1.5s infinite;
-      background-color: #e0e7ff !important;
-      border-color: #4f46e5 !important;
-      color: #312e81 !important;
-    }
-
-    /* 竖屏检测遮罩：仅在手机竖屏时显示 */
+    /* 竖屏提示遮罩 */
     @media (orientation: portrait) {
-      #portrait-warning {
-        display: flex !important;
-      }
+      #portrait-gate { display: flex !important; }
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen overflow-hidden flex flex-col">
+<body class="bg-slate-900 text-slate-100 font-sans h-screen overflow-hidden flex flex-col">
 
-  <!-- 竖屏强制横屏提示遮罩 -->
-  <div id="portrait-warning" class="hidden fixed inset-0 bg-slate-900 text-white z-50 flex-col items-center justify-center p-6 text-center">
-    <div class="animate-bounce mb-4 text-indigo-400">
-      <i data-lucide="screen-share" class="h-16 w-16 rotate-90"></i>
+  <!-- 竖屏强制引导遮罩 -->
+  <div id="portrait-gate" class="hidden fixed inset-0 bg-slate-950 z-50 flex-col items-center justify-center p-6 text-center">
+    <div class="p-4 bg-indigo-500/10 rounded-full text-indigo-400 mb-4 animate-bounce">
+      <i data-lucide="rotate-cw" class="h-12 w-12"></i>
     </div>
-    <h2 class="text-lg font-black tracking-wide">请将手机横屏使用</h2>
-    <p class="text-xs text-slate-400 mt-2">横屏版布局专为手机双手握持优化，分拣效率翻倍！</p>
+    <h2 class="text-lg font-bold text-white mb-2">请旋转手机至横屏</h2>
+    <p class="text-xs text-slate-400 max-w-xs">跑团分拣系统需要较宽的视野，横屏操作才能获得最完美的双翼分流体验哦！</p>
   </div>
 
-  <!-- 顶部极简导航 -->
-  <header class="flex items-center justify-between px-3 py-1.5 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20">
-    <div class="flex items-center space-x-1.5">
-      <div class="p-1 bg-indigo-50 rounded text-indigo-600">
-        <i data-lucide="smartphone" class="h-3.5 w-3.5"></i>
+  <!-- 顶部导航栏 (高度压缩版) -->
+  <header class="flex items-center justify-between px-4 py-1.5 bg-slate-950 border-b border-slate-800 shrink-0 z-20">
+    <div class="flex items-center space-x-2">
+      <div class="p-1 bg-indigo-600 rounded text-white">
+        <i data-lucide="layers" class="h-3.5 w-3.5"></i>
       </div>
-      <h1 class="text-xs font-black text-slate-900">Log分拣 (手机横屏版)</h1>
+      <div>
+        <h1 class="text-xs font-bold text-white tracking-wide">跑团分拣 (移动端)</h1>
+      </div>
     </div>
 
-    <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple class="hidden" />
-
-    <!-- 右侧控制区：新增全屏切换按钮 -->
-    <div class="flex items-center space-x-1">
-      <button id="fullscreenBtn" onclick="toggleFullscreen()" class="flex items-center space-x-0.5 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 shadow-sm mr-1">
-        <i data-lucide="maximize" class="h-3 w-3" id="fullscreenIcon"></i>
-        <span id="fullscreenText">全屏</span>
-      </button>
-
+    <!-- 移动端紧凑操作区 -->
+    <div class="flex items-center space-x-1.5">
+      <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" class="hidden" />
+      
       <div id="actionButtons" class="flex items-center space-x-1">
-        <button id="uploadBtn" class="flex items-center space-x-0.5 px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm">
+        <button id="uploadBtn" class="flex items-center space-x-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-bold">
           <i data-lucide="upload" class="h-3 w-3"></i>
-          <span>上传</span>
-        </button>
-        <button id="mockBtn" class="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200">
-          测试
+          <span>导入 / 进度</span>
         </button>
       </div>
+
       <div id="activeControls" class="hidden flex items-center space-x-1">
-        <button id="undoBtn" disabled class="p-1 bg-white text-slate-400 rounded-lg border border-slate-200 disabled:opacity-50">
-          <i data-lucide="undo-2" class="h-3.5 w-3.5"></i>
+        <button id="saveProgressBtn" class="flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold">
+          <i data-lucide="save" class="h-3 w-3"></i>
+          <span>保存</span>
         </button>
-        <button id="appendBtn" class="p-1 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-200">
-          <i data-lucide="plus" class="h-3.5 w-3.5"></i>
+        <button id="undoBtn" disabled class="flex items-center space-x-1 px-2 py-1 bg-slate-800 text-slate-500 rounded text-[11px] border border-slate-700 disabled:opacity-40">
+          <i data-lucide="undo-2" class="h-3 w-3"></i>
+          <span>撤回</span>
         </button>
-        <button id="resetBtn" class="p-1 bg-slate-100 text-slate-600 rounded-lg border border-slate-200">
-          <i data-lucide="rotate-ccw" class="h-3.5 w-3.5"></i>
+        <button id="resetBtn" class="px-2 py-1 bg-slate-800 text-slate-300 rounded text-[11px] border border-slate-700">
+          重置
         </button>
       </div>
     </div>
   </header>
 
-  <!-- 手机端横屏左右分栏双翼布局 -->
+  <!-- 主体工作区 (横屏双翼排布) -->
   <main class="flex-1 flex overflow-hidden p-2 gap-2">
     
-    <!-- 【左侧翼】：待处理队列（大字号，大按钮，显示 10 行） -->
-    <section class="flex-[5.5] flex flex-col bg-white rounded-xl p-2 shadow-sm overflow-hidden border border-slate-200/60">
-      <div class="flex items-center justify-between mb-1 shrink-0 px-1">
-        <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span> 行)</span>
-        <span id="lockTip" class="hidden text-[9px] bg-amber-50 text-orange-600 border border-amber-200 px-1 rounded font-bold animate-pulse">
-          🔒 锁定模式：点击行内文字直接分流
-        </span>
+    <!-- 【左侧翼】：待处理队列 (占据 60% 宽度) -->
+    <section class="flex-[6] flex flex-col bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-hidden">
+      <div class="flex items-center justify-between mb-1.5 shrink-0">
+        <div class="flex items-center space-x-1.5">
+          <span class="flex h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+          <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span>)</h2>
+          <span id="lockTip" class="hidden text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 rounded animate-pulse">🔒 锁定激活</span>
+        </div>
+        <span id="headerInfoText" class="text-[9px] text-slate-500 truncate max-w-[120px]"></span>
       </div>
 
-      <div id="queueList" class="flex-1 flex flex-col justify-start space-y-1 bg-slate-50/50 p-1 rounded-lg overflow-y-auto">
-        <div class="h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center">
-          <i data-lucide="upload" class="h-6 w-6 mb-1 text-indigo-500/60 animate-bounce"></i>
-          <p class="text-xs font-bold text-slate-600">请点击右上角上传表格</p>
+      <!-- 队列容器 -->
+      <div id="queueList" class="flex-1 flex flex-col justify-start space-y-1.5 bg-slate-900/50 p-1.5 rounded-lg border border-slate-800 overflow-y-auto">
+        <div class="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center">
+          <i data-lucide="upload" class="h-6 w-6 mb-1.5 text-indigo-500/60"></i>
+          <p class="text-[11px] font-medium text-slate-400">请导入表格或进度文件</p>
         </div>
       </div>
     </section>
 
-    <!-- 【右侧翼】：分窗接收区（横向滑屏查看，单手掌控） -->
-    <section class="flex-[4.5] flex flex-col bg-white rounded-xl p-2 shadow-sm overflow-hidden border border-slate-200/60 shrink-0">
-      <div class="flex items-center justify-between mb-1 shrink-0 px-1">
-        <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">分流接收窗口</span>
-        <button id="toggleRenameBtn" class="hidden text-[9px] bg-indigo-50 text-indigo-600 rounded border border-indigo-200 px-1.5 py-0.5 font-bold">
-          整理发送者
+    <!-- 【右侧翼】：分窗接收区 (占据 40% 宽度) -->
+    <section class="flex-[4] flex flex-col bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-hidden">
+      <div class="flex items-center justify-between mb-1.5 shrink-0">
+        <div class="flex items-center space-x-1">
+          <span class="flex h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
+          <h2 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">分流接收窗</h2>
+        </div>
+        <button id="addWindowBtn" class="px-1.5 py-0.5 text-[9px] bg-slate-800 text-indigo-400 rounded border border-slate-700">
+          + 窗口
         </button>
       </div>
 
-      <!-- 横向排布容器 -->
-      <div id="windowsContainer" class="flex-1 flex gap-2 overflow-x-auto pb-1 pr-1">
+      <!-- 窗口横向/纵向混合排布容器 -->
+      <div id="windowsContainer" class="flex-1 flex flex-col gap-1.5 overflow-y-auto pr-0.5">
         <!-- 动态渲染分窗 -->
       </div>
     </section>
-
-    <!-- 绝对定位/弹性展开的“重命名面板” -->
-    <div id="renamePanel" class="hidden fixed bottom-2 right-2 left-2 bg-indigo-50/95 border border-indigo-100 rounded-xl p-2 max-h-[120px] overflow-y-auto shadow-lg z-30">
-      <div id="renameList" class="space-y-1"></div>
-    </div>
-
   </main>
 
   <script>
     const PRESET_COLORS = [
-      { border: 'border-pink-200', bg: 'bg-pink-50/60', text: 'text-pink-600', btn: 'bg-pink-500 text-white' }, 
-      { border: 'border-blue-200', bg: 'bg-blue-50/60', text: 'text-blue-600', btn: 'bg-blue-500 text-white' },
-      { border: 'border-emerald-200', bg: 'bg-emerald-50/60', text: 'text-emerald-600', btn: 'bg-emerald-500 text-white' },
-      { border: 'border-purple-200', bg: 'bg-purple-50/60', text: 'text-purple-600', btn: 'bg-purple-500 text-white' },
-      { border: 'border-orange-200', bg: 'bg-orange-50/60', text: 'text-orange-600', btn: 'bg-orange-500 text-white' },
+      { border: 'border-pink-900/40', bg: 'bg-pink-950/20', text: 'text-pink-400', btn: 'bg-pink-600 text-white' }, 
+      { border: 'border-blue-900/40', bg: 'bg-blue-950/20', text: 'text-blue-400', btn: 'bg-blue-600 text-white' },
+      { border: 'border-emerald-900/40', bg: 'bg-emerald-950/20', text: 'text-emerald-400', btn: 'bg-emerald-600 text-white' },
+      { border: 'border-purple-900/40', bg: 'bg-purple-950/20', text: 'text-purple-400', btn: 'bg-purple-600 text-white' },
+      { border: 'border-orange-900/40', bg: 'bg-orange-950/20', text: 'text-orange-400', btn: 'bg-orange-600 text-white' }
     ];
-
-    const MOCK_COMPLEX_DATA = [
-      { id: 'mock-1', 时间: '2026-10-04T02:01:10.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '哈喽哈喽，大家早上好呀！', _来源: '群聊A' },
-      { id: 'mock-2', 时间: '2026-10-04T02:02:15.000Z', 发送者: '李四-HO2', 发送者QQ号: '10002', 消息内容: '早！今天晚上有人开团吗？求带！', _来源: '群聊A' },
-      { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '张小三', 发送者QQ号: '10001', 消息内容: '帮我看看这个卡怎么建。', _来源: '群聊B' },
-      { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '旁观者NPC', 发送者QQ号: '99999', 消息内容: '【系统提示：请遵守群规】', _来源: '群聊B' },
-      { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '李大四', 发送者QQ号: '10002', 消息内容: '新人报道，请多多指教~', _来源: '群聊C' },
-      { id: 'mock-6', 时间: '2026-10-04T02:06:10.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '我的角色卡已经做好了，KP看看？', _来源: '群聊A' },
-      { id: 'mock-7', 时间: '2026-10-04T02:07:15.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '属性是：力量 60，敏捷 70，意志 80。', _来源: '群聊A' },
-      { id: 'mock-8', 时间: '2026-10-04T02:08:00.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '技能点我全加在侦查和图书馆了。', _来源: '群聊A' },
-    ];
+    const GROUP_BG_COLORS = ['bg-rose-950/10 border-rose-900/30', 'bg-sky-950/10 border-sky-900/30', 'bg-emerald-950/10 border-emerald-900/30', 'bg-amber-950/10 border-amber-900/30', 'bg-violet-950/10 border-violet-900/30'];
 
     let windows = [
       { id: 'win-0', name: '水聊', color: PRESET_COLORS[0], items: [] },
       { id: 'win-1', name: 'HO1', color: PRESET_COLORS[1], items: [] },
       { id: 'win-2', name: 'HO2', color: PRESET_COLORS[2], items: [] },
-      { id: 'win-3', name: 'HO3', color: PRESET_COLORS[3], items: [] },
-      { id: 'win-4', name: 'HO4', color: PRESET_COLORS[4], items: [] },
+      { id: 'win-3', name: 'HO3', color: PRESET_COLORS[3], items: [] }
     ];
     let queue = [];
     let isLoaded = false;
-    let originalHeaders = new Set(); 
-    let isRenamePanelOpen = false;
+    let originalHeaders = new Set();
     let lockedWindowId = null;
     let qqToWindowMapping = {};
     let actionHistory = [];
-
-    // 全屏切换逻辑
-    window.toggleFullscreen = function() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().then(() => {
-          document.getElementById('fullscreenText').innerText = "退出";
-          document.getElementById('fullscreenIcon').setAttribute('data-lucide', 'minimize');
-          lucide.createIcons();
-        }).catch(err => {
-          alert(`无法进入全屏: ${err.message}`);
-        });
-      } else {
-        document.exitFullscreen().then(() => {
-          document.getElementById('fullscreenText').innerText = "全屏";
-          document.getElementById('fullscreenIcon').setAttribute('data-lucide', 'maximize');
-          lucide.createIcons();
-        });
-      }
-    };
-
-    function extractGroupName(filename) {
-      if (!filename) return '未知';
-      const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;
-      return nameWithoutExt.length > 5 ? nameWithoutExt.substring(0, 5) : nameWithoutExt;
-    }
+    let groupColorMapping = {};
 
     function extractFields(row) {
       return {
         displayTime: row['时间'] || '',
-        displaySender: row['发送者'] || '未知',
+        displaySender: row['发送者'] || '未知发送者',
         displayContent: row['消息内容'] || '（无内容）',
         rawTimeValue: row['时间'] ? new Date(row['时间']).getTime() : 0
       };
     }
 
     function getRowQQ(row) {
-      return row['发送者QQ号'] || row['发送者QQ'] || row['QQ'] || row['发送者ID'] || '无QQ';
+      return row['发送者QQ号'] || row['发送者QQ'] || row['QQ'] || row['发送者id'] || row['发送者ID'] || '无QQ';
+    }
+
+    function formatOnlyTime(isoString) {
+      if (!isoString) return '';
+      return isoString.includes('T') ? isoString.split('T')[1].split('.')[0] : String(isoString);
     }
 
     function getRecommendedWindow() {
       if (queue.length === 0) return null;
       const qq = getRowQQ(queue[0]);
       const recommendedWinId = qqToWindowMapping[qq];
-      return recommendedWinId ? windows.find(w => w.id === recommendedWinId) : null;
+      return recommendedWinId ? windows.find(w => w.id === recommendedWinId) || null : null;
+    }
+
+    function getGroupColorClass(sourceName) {
+      if (!groupColorMapping[sourceName]) {
+        const assignedIndex = Object.keys(groupColorMapping).length % GROUP_BG_COLORS.length;
+        groupColorMapping[sourceName] = GROUP_BG_COLORS[assignedIndex];
+      }
+      return groupColorMapping[sourceName];
     }
 
     function renderAll() {
       renderWindows();
       renderQueue();
-      renderRenameList();
       updateUndoButtonState();
       lucide.createIcons();
     }
@@ -234,33 +183,21 @@
       container.innerHTML = '';
 
       windows.forEach((win, index) => {
-        const isLocked = lockedWindowId === win.id;
         const winEl = document.createElement('div');
-        winEl.className = `flex flex-col w-36 md:w-44 shrink-0 rounded-lg border transition-all ${
-          isLocked ? 'border-indigo-600 bg-indigo-50/50 shadow' : `${win.color.border} ${win.color.bg}`
-        }`;
-
+        const isLocked = lockedWindowId === win.id;
+        winEl.className = `flex items-center justify-between p-2 rounded-lg border transition-all ${isLocked ? 'border-indigo-500 bg-indigo-950/20' : `${win.color.border} ${win.color.bg}`}`;
+        
         winEl.innerHTML = `
-          <div class="px-1.5 py-1 flex items-center justify-between border-b border-slate-200/60 bg-white/80 shrink-0">
-            <div class="flex items-center space-x-1 min-w-0">
-              <input type="checkbox" ${isLocked ? 'checked' : ''} onchange="toggleLockWindow('${win.id}', this.checked)" class="h-3 w-3 text-indigo-600 rounded" />
-              <span class="text-[10px] font-black text-slate-700 truncate">${win.name}</span>
+          <div class="flex items-center space-x-1.5 min-w-0">
+            <input type="checkbox" ${isLocked ? 'checked' : ''} onchange="toggleLockWindow('${win.id}', this.checked)" class="h-4 w-4 text-indigo-600 border-slate-700 rounded bg-slate-800" />
+            <div class="min-w-0">
+              <div class="text-[11px] font-bold text-slate-200 truncate">${win.name}</div>
+              <div class="text-[9px] text-slate-500">已收集 <span class="font-bold ${win.color.text}">${win.items.length}</span> 行</div>
             </div>
-            <button onclick="exportWindow('${win.id}')" class="p-0.5 text-slate-500 hover:text-emerald-600">
-              <i data-lucide="download" class="h-3 w-3"></i>
-            </button>
           </div>
-          <div id="window-scroll-${win.id}" class="flex-1 p-1 overflow-y-auto space-y-1 max-h-[140px] no-scrollbar">
-            ${win.items.length === 0 ? '<div class="text-[8px] text-slate-400 text-center py-4">无数据</div>' : win.items.map(item => `
-              <div class="p-1 bg-white rounded border border-slate-200 text-[9px]">
-                <div class="font-bold text-slate-600 truncate">${extractFields(item).displaySender}</div>
-                <div class="text-slate-800 truncate">${extractFields(item).displayContent}</div>
-              </div>
-            `).join('')}
-          </div>
-          <div class="px-1.5 py-0.5 bg-white/80 text-[8px] text-slate-500 flex justify-between border-t border-slate-200/60 shrink-0">
-            <span>${isLocked ? '🔒 锁定' : '已收'}</span>
-            <span class="font-bold ${win.color.text}">${win.items.length}行</span>
+          <div class="flex items-center space-x-1">
+            <button onclick="exportWindow('${win.id}')" class="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded"><i data-lucide="download" class="h-3.5 w-3.5"></i></button>
+            <button onclick="removeWindow('${win.id}')" class="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i></button>
           </div>
         `;
         container.appendChild(winEl);
@@ -268,10 +205,64 @@
     }
 
     window.toggleLockWindow = function(winId, checked) {
-      lockedWindowId = checked ? winId : (lockedWindowId === winId ? null : lockedWindowId);
-      document.getElementById('lockTip').className = lockedWindowId ? "text-[9px] bg-amber-50 text-orange-600 border border-amber-200 px-1 rounded font-bold animate-pulse" : "hidden";
+      lockedWindowId = checked ? winId : null;
+      document.getElementById('lockTip').className = lockedWindowId ? 'text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 rounded animate-pulse' : 'hidden';
       renderAll();
     };
+
+    function renderQueue() {
+      document.getElementById('queueCount').innerText = queue.length;
+      const listContainer = document.getElementById('queueList');
+
+      if (!isLoaded) {
+        listContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center"><i data-lucide="upload" class="h-6 w-6 mb-1.5 text-indigo-500/60"></i><p class="text-[11px] font-medium text-slate-400">请导入表格或进度文件</p></div>`;
+        return;
+      }
+
+      if (queue.length === 0) {
+        listContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center"><i data-lucide="check-circle-2" class="h-6 w-6 mb-1.5 text-emerald-500"></i><p class="text-[11px] text-emerald-400 font-bold">分拣完毕！</p></div>`;
+        return;
+      }
+
+      const recommendedWin = getRecommendedWindow();
+      const queueHtmlArr = [];
+
+      queue.forEach((item, i) => {
+        const isFirst = i === 0;
+        const info = extractFields(item);
+        const sourceLabel = item._来源 || '未知';
+        const groupColorClass = getGroupColorClass(sourceLabel);
+
+        let rowButtonsHtml = '';
+        windows.forEach((win) => {
+          const isRec = isFirst && recommendedWin && recommendedWin.id === win.id;
+          rowButtonsHtml += `
+            <button onclick="sortItemDirectly(event, ${i}, '${win.id}')" class="px-2 py-1 text-[10px] font-bold rounded border ${isRec ? 'bg-indigo-600 border-indigo-500 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'}">
+              ${win.name}
+            </button>
+          `;
+        });
+
+        queueHtmlArr.push(`
+          <div onclick="handleQueueRowClick(${i})" class="flex-none flex flex-col p-2 rounded-lg border border-slate-800 gap-1 bg-slate-900/80 ${groupColorClass}">
+            <div class="flex items-center justify-between w-full">
+              <div class="flex items-center space-x-1.5 min-w-0">
+                <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-slate-800 text-slate-400">${i + 1}</span>
+                <span class="text-[8px] font-bold text-indigo-400 bg-indigo-950/40 px-1 rounded border border-indigo-900/30">${sourceLabel}</span>
+                <span class="text-[10px] font-bold text-slate-200 truncate max-w-[80px]">${info.displaySender}</span>
+              </div>
+              <div class="flex items-center space-x-1 shrink-0">${rowButtonsHtml}</div>
+            </div>
+            <div class="w-full pl-5 flex justify-between items-end gap-2">
+              <p class="text-[11px] text-slate-300 leading-relaxed break-all select-text flex-1">${info.displayContent}</p>
+              <button onclick="deleteSingleQueueItem(event, ${i})" class="p-1 bg-slate-800 text-slate-500 hover:text-rose-400 rounded border border-slate-700"><i data-lucide="trash-2" class="h-3 w-3"></i></button>
+            </div>
+          </div>
+        `);
+      });
+
+      listContainer.innerHTML = queueHtmlArr.join('');
+    }
 
     window.sortItemDirectly = function(e, itemIndex, windowId) {
       e.stopPropagation();
@@ -284,156 +275,33 @@
           qqToWindowMapping[getRowQQ(item)] = windowId;
         }
         renderAll();
-        scrollWindowToBottom(windowId);
+      }
+    };
+
+    window.deleteSingleQueueItem = function(e, index) {
+      e.stopPropagation();
+      if (index < queue.length) {
+        const [deletedItem] = queue.splice(index, 1);
+        pushAction({ type: 'delete_single', item: deletedItem, originalIdx: index });
+        renderAll();
       }
     };
 
     window.handleQueueRowClick = function(itemIndex) {
-      if (lockedWindowId) window.sortItemDirectly(event, itemIndex, lockedWindowId);
-    };
-
-    function renderQueue() {
-      document.getElementById('queueCount').innerText = queue.length;
-      const listContainer = document.getElementById('queueList');
-      listContainer.innerHTML = '';
-
-      if (!isLoaded) {
-        listContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center"><i data-lucide="upload" class="h-6 w-6 mb-1 text-indigo-500/60 animate-bounce"></i><p class="text-xs font-bold text-slate-600">请点击右上角上传表格</p></div>`;
-        document.getElementById('toggleRenameBtn').classList.add('hidden');
-        return;
-      }
-
-      document.getElementById('toggleRenameBtn').classList.remove('hidden');
-
-      if (queue.length === 0) {
-        listContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 p-4 text-center"><i data-lucide="check-circle-2" class="h-6 w-6 mb-1 text-emerald-500"></i><p class="text-xs text-emerald-600 font-bold">分拣完毕！</p></div>`;
-        return;
-      }
-
-      const recommendedWin = getRecommendedWindow();
-
-      for (let i = 0; i < 10; i++) {
-        const item = queue[i];
-        const itemEl = document.createElement('div');
-        
-        if (!item) {
-          itemEl.className = "flex-1 min-h-[38px] border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-300 text-[9px]";
-          itemEl.innerText = "(空闲)";
-        } else {
-          const isFirst = i === 0;
-          const info = extractFields(item);
-          const hoverClass = lockedWindowId ? 'bg-amber-50/30 border-amber-200' : 'bg-white border-slate-200';
-
-          let buttonsHtml = '';
-          windows.forEach(win => {
-            const isRec = isFirst && recommendedWin && recommendedWin.id === win.id;
-            const shortName = win.name === '水聊' ? '水' : (win.name.startsWith('HO') ? win.name.replace('HO', 'H') : win.name.substring(0, 1));
-            buttonsHtml += `
-              <button onclick="sortItemDirectly(event, ${i}, '${win.id}')" class="w-6 h-6 text-[9px] font-black rounded border flex items-center justify-center transition-all active:scale-75 ${
-                isRec ? 'recommend-pulse border-indigo-500' : 'bg-slate-100 border-slate-200 text-slate-700'
-              }">${shortName}</button>
-            `;
-          });
-
-          itemEl.className = `flex-1 min-h-[40px] flex items-center justify-between px-2 py-0.5 rounded-lg border transition-all ${hoverClass} ${isFirst ? 'ring-1 ring-indigo-200 border-indigo-300' : 'opacity-85'}`;
-          itemEl.onclick = () => handleQueueRowClick(i);
-          itemEl.innerHTML = `
-            <div class="flex-1 min-w-0 pr-1">
-              <div class="flex items-center space-x-1">
-                <span class="text-[8px] font-bold text-slate-400">#${i+1}</span>
-                <span class="text-[10px] font-black text-slate-800 truncate max-w-[80px]">${info.displaySender}</span>
-              </div>
-              <div class="text-[11px] text-slate-900 font-bold truncate mt-0.5">${info.displayContent}</div>
-            </div>
-            <div class="flex items-center space-x-0.5 shrink-0">
-              ${buttonsHtml}
-            </div>
-          `;
+      if (!lockedWindowId) return;
+      if (itemIndex < queue.length) {
+        const item = queue.splice(itemIndex, 1)[0];
+        const win = windows.find(w => w.id === lockedWindowId);
+        if (win) {
+          win.items.push(item);
+          pushAction({ type: 'click_sort', windowId: lockedWindowId, item: item, originalIdx: itemIndex });
+          qqToWindowMapping[getRowQQ(item)] = lockedWindowId;
         }
-        listContainer.appendChild(itemEl);
+        renderAll();
       }
-    }
-
-    function renderRenameList() {
-      const panel = document.getElementById('renamePanel');
-      const list = document.getElementById('renameList');
-      list.innerHTML = '';
-      if (!isLoaded) return panel.classList.add('hidden');
-
-      const qqToNames = {};
-      const allItems = [...queue];
-      windows.forEach(w => allItems.push(...w.items));
-      allItems.forEach(item => {
-        const qq = getRowQQ(item);
-        if (!qqToNames[qq]) qqToNames[qq] = new Set();
-        qqToNames[qq].add(item['发送者'] || '未知');
-      });
-
-      Object.keys(qqToNames).forEach(qq => {
-        const namesStr = Array.from(qqToNames[qq]).join('/');
-        const row = document.createElement('div');
-        row.className = "flex items-center justify-between bg-white p-1 rounded border border-slate-200 text-[10px] gap-1";
-        row.innerHTML = `
-          <span class="truncate font-bold text-slate-700 max-w-[120px]">${namesStr}</span>
-          <div class="flex items-center space-x-1 shrink-0">
-            <input type="text" placeholder="新名" id="rename-input-${qq}" class="w-16 px-1 py-0.5 border rounded bg-slate-50 text-[9px]" />
-            <button onclick="applyGlobalRename('${qq}')" class="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-bold">改</button>
-            <button onclick="deleteQQRecords('${qq}', '${namesStr}')" class="p-0.5 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="h-3 w-3"></i></button>
-          </div>
-        `;
-        list.appendChild(row);
-      });
-    }
-
-    window.applyGlobalRename = function(qq) {
-      const input = document.getElementById(`rename-input-${qq}`);
-      if (!input || !input.value.trim()) return;
-      const newName = input.value.trim();
-      const oldNamesMap = [];
-      const record = (item) => {
-        if (String(getRowQQ(item)) === String(qq)) {
-          oldNamesMap.push({ id: item.id, oldName: item['发送者'] });
-          item['发送者'] = newName;
-        }
-      };
-      queue.forEach(record);
-      windows.forEach(w => w.items.forEach(record));
-      pushAction({ type: 'rename', qq: qq, oldNamesMap: oldNamesMap });
-      renderAll();
     };
 
-    window.deleteQQRecords = function(qq, namesStr) {
-      if (!confirm(`确定要删除 ${namesStr} 的记录吗？`)) return;
-      const deletedQueueItems = queue.filter(item => String(getRowQQ(item)) === String(qq));
-      const deletedWinItems = [];
-      queue = queue.filter(item => String(getRowQQ(item)) !== String(qq));
-      windows.forEach(win => {
-        const winDeleted = win.items.filter(item => String(getRowQQ(item)) === String(qq));
-        if (winDeleted.length > 0) deletedWinItems.push({ winId: win.id, items: winDeleted });
-        win.items = win.items.filter(item => String(getRowQQ(item)) !== String(qq));
-      });
-      pushAction({ type: 'delete_qq', qq: qq, deletedQueueItems: deletedQueueItems, deletedWinItems: deletedWinItems });
-      renderAll();
-    };
-
-    document.getElementById('toggleRenameBtn').onclick = () => {
-      isRenamePanelOpen = !isRenamePanelOpen;
-      const panel = document.getElementById('renamePanel');
-      isRenamePanelOpen ? panel.classList.remove('hidden') : panel.classList.add('hidden');
-    };
-
-    function scrollWindowToBottom(windowId) {
-      setTimeout(() => {
-        const el = document.getElementById(`window-scroll-${windowId}`);
-        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-      }, 50);
-    }
-
-    function pushAction(action) {
-      actionHistory.push(action);
-      updateUndoButtonState();
-    }
-
+    function pushAction(action) { actionHistory.push(action); updateUndoButtonState(); }
     function updateUndoButtonState() {
       const btn = document.getElementById('undoBtn');
       if (btn) btn.disabled = actionHistory.length === 0;
@@ -445,57 +313,58 @@
       if (act.type === 'click_sort') {
         const win = windows.find(w => w.id === act.windowId);
         if (win && win.items.length > 0) queue.splice(act.originalIdx, 0, win.items.pop());
-      }
-      else if (act.type === 'rename') {
-        const restore = (item) => {
-          const match = act.oldNamesMap.find(r => r.id === item.id);
-          if (match) item['发送者'] = match.oldName;
-        };
-        queue.forEach(restore);
-        windows.forEach(w => w.items.forEach(restore));
-      } 
-      else if (act.type === 'delete_qq') {
-        queue = [...queue, ...act.deletedQueueItems].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
-        act.deletedWinItems.forEach(rec => {
-          const win = windows.find(w => w.id === rec.winId);
-          if (win) win.items = [...win.items, ...rec.items].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
-        });
+      } else if (act.type === 'delete_single') {
+        queue.splice(act.originalIdx, 0, act.item);
       }
       renderAll();
     };
 
     document.getElementById('undoBtn').onclick = () => triggerUndo();
+    function removeWindow(id) {
+      const win = windows.find(w => w.id === id);
+      if (win && win.items.length > 0) { queue = [...queue, ...win.items].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue); }
+      windows = windows.filter(w => w.id !== id);
+      renderAll();
+    }
+
+    document.getElementById('addWindowBtn').onclick = () => {
+      if (windows.length >= 8) return alert('最多支持 8 个分窗');
+      windows.push({ id: `win-${windows.length}`, name: `新窗 ${windows.length}`, color: PRESET_COLORS[windows.length % PRESET_COLORS.length], items: [] });
+      renderAll();
+    };
 
     window.exportWindow = function(windowId) {
       const win = windows.find(w => w.id === windowId);
-      if (!win || win.items.length === 0) return alert('无数据');
+      if (!win || win.items.length === 0) return alert('暂无数据');
       const headers = Array.from(originalHeaders);
-      const csvContent = [headers, ...win.items.map(item => headers.map(h => {
-        const val = String(item[h] !== undefined ? item[h] : '');
-        return val.includes(',') ? `"${val}"` : val;
-      }))].map(e => e.join(",")).join("\n");
-
+      const csvContent = [headers, ...win.items.map(item => headers.map(h => { const val = String(item[h] !== undefined ? item[h] : ''); return val.includes(',') ? `"${val}"` : val; }))].map(e => e.join(",")).join("\n");
       const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `${win.name}_导出.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      link.href = URL.createObjectURL(blob); link.download = `${win.name}.csv`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    };
+
+    document.getElementById('saveProgressBtn').onclick = () => {
+      if (!isLoaded) return alert('暂无数据');
+      try {
+        const wb = XLSX.utils.book_new();
+        const headers = Array.from(originalHeaders);
+        const formatData = (items) => [headers, ...items.map(item => headers.map(h => item[h] !== undefined ? item[h] : ''))];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(formatData(queue)), "待处理队列");
+        windows.forEach(win => {
+          const safeSheetName = win.name.replace(/[\\\?\*\/\[\]]/g, '').substring(0, 30) || `分窗_${win.id}`;
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(formatData(win.items)), safeSheetName);
+        });
+        XLSX.writeFile(wb, `跑团进度_手机备份.xlsx`);
+      } catch (err) { alert(`保存失败: ${err.message}`); }
     };
 
     function readFileAsync(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
-          try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            resolve({ data: XLSX.utils.sheet_to_json(sheet, { defval: "" }), filename: file.name });
-          } catch (err) { reject(err); }
+          try { resolve({ workbook: XLSX.read(new Uint8Array(e.target.result), { type: 'array' }), filename: file.name }); } catch (err) { reject(err); }
         };
-        reader.onerror = (err) => reject(err);
         reader.readAsArrayBuffer(file);
       });
     }
@@ -504,58 +373,60 @@
       if (files.length === 0) return;
       try {
         const results = await Promise.all(Array.from(files).map(file => readFileAsync(file)));
+        if (results.length === 1 && results[0].workbook.SheetNames.includes("待处理队列")) {
+          const wb = results[0].workbook;
+          queue = XLSX.utils.sheet_to_json(wb.Sheets["待处理队列"], { defval: "" });
+          queue.forEach((row, idx) => { row.id = `row-imported-q-${idx}-${Date.now()}`; Object.keys(row).forEach(h => { if (h !== 'id' && h !== '_来源') originalHeaders.add(h); }); });
+          windows = []; let winIdx = 0;
+          wb.SheetNames.forEach(sheetName => {
+            if (sheetName !== "待处理队列") {
+              const items = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
+              items.forEach((row, idx) => { row.id = `row-imported-w-${winIdx}-${idx}-${Date.now()}`; });
+              windows.push({ id: `win-${winIdx}`, name: sheetName, color: PRESET_COLORS[winIdx % PRESET_COLORS.length], items: items });
+              winIdx++;
+            }
+          });
+          isLoaded = true;
+          document.getElementById('actionButtons').classList.add('hidden');
+          document.getElementById('activeControls').classList.remove('hidden');
+          renderAll(); return;
+        }
+
         const newRows = [];
         results.forEach((res, fileIdx) => {
           const groupMark = extractGroupName(res.filename);
-          if (res.data.length > 0) {
-            Object.keys(res.data[0]).forEach(h => { if (h !== 'id' && h !== '_来源') originalHeaders.add(h); });
+          const data = XLSX.utils.sheet_to_json(res.workbook.Sheets[res.workbook.SheetNames[0]], { defval: "" });
+          if (data.length > 0) {
+            Object.keys(data[0]).forEach(h => { if (h !== 'id' && h !== '_来源') originalHeaders.add(h); });
             originalHeaders.add('_来源');
-            res.data.forEach((row, idx) => {
-              row.id = `row-${Date.now()}-${fileIdx}-${idx}`;
-              row._来源 = groupMark;
-              newRows.push(row);
-            });
+            data.forEach((row, idx) => { row.id = `row-${Date.now()}-${fileIdx}-${idx}`; row._来源 = groupMark; newRows.push(row); });
           }
         });
         queue = [...queue, ...newRows].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
         isLoaded = true;
         document.getElementById('actionButtons').classList.add('hidden');
         document.getElementById('activeControls').classList.remove('hidden');
+        document.getElementById('headerInfoText').innerText = `已导入 ${queue.length} 行`;
         renderAll();
-      } catch (error) { alert('读取出错'); }
+      } catch (error) { alert('出错: ' + error.message); }
     }
 
     const fileInput = document.getElementById('fileInput');
     document.getElementById('uploadBtn').onclick = () => fileInput.click();
-    document.getElementById('appendBtn').onclick = () => fileInput.click();
     fileInput.onchange = (e) => { processFiles(e.target.files); fileInput.value = ''; };
 
-    document.getElementById('mockBtn').onclick = () => {
-      originalHeaders = new Set(Object.keys(MOCK_COMPLEX_DATA[0]));
-      queue = [...MOCK_COMPLEX_DATA].sort((a, b) => extractFields(a).rawTimeValue - extractFields(b).rawTimeValue);
-      isLoaded = true;
-      windows.forEach(w => w.items = []);
-      actionHistory = []; qqToWindowMapping = {};
-      document.getElementById('actionButtons').classList.add('hidden');
-      document.getElementById('activeControls').classList.remove('hidden');
-      renderAll();
-    };
-
     document.getElementById('resetBtn').onclick = () => {
-      queue = []; isLoaded = false; originalHeaders = new Set(); isRenamePanelOpen = false;
-      actionHistory = []; qqToWindowMapping = {}; lockedWindowId = null;
-      document.getElementById('renamePanel').classList.add('hidden');
-      document.getElementById('lockTip').classList.add('hidden');
+      queue = []; isLoaded = false; originalHeaders = new Set(); lockedWindowId = null; groupColorMapping = {};
       windows = [
         { id: 'win-0', name: '水聊', color: PRESET_COLORS[0], items: [] },
         { id: 'win-1', name: 'HO1', color: PRESET_COLORS[1], items: [] },
         { id: 'win-2', name: 'HO2', color: PRESET_COLORS[2], items: [] },
-        { id: 'win-3', name: 'HO3', color: PRESET_COLORS[3], items: [] },
-        { id: 'win-4', name: 'HO4', color: PRESET_COLORS[4], items: [] },
+        { id: 'win-3', name: 'HO3', color: PRESET_COLORS[3], items: [] }
       ];
       fileInput.value = '';
       document.getElementById('actionButtons').classList.remove('hidden');
       document.getElementById('activeControls').classList.add('hidden');
+      document.getElementById('headerInfoText').innerText = '';
       renderAll();
     };
 
