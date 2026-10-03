@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>跑团log分拣系统 (手机版)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>跑团log分拣系统 (手机横屏版)</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
@@ -23,7 +23,7 @@
     /* 适合手机触控的呼吸灯 */
     @keyframes pulse-light {
       0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.05); opacity: 0.8; }
+      50% { transform: scale(1.03); opacity: 0.9; }
     }
     .recommend-pulse {
       animation: pulse-light 1.5s infinite;
@@ -31,17 +31,33 @@
       border-color: #4f46e5 !important;
       color: #312e81 !important;
     }
+
+    /* 竖屏检测遮罩：仅在手机竖屏时显示 */
+    @media (orientation: portrait) {
+      #portrait-warning {
+        display: flex !important;
+      }
+    }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans h-screen overflow-hidden flex flex-col">
 
+  <!-- 竖屏强制横屏提示遮罩 -->
+  <div id="portrait-warning" class="hidden fixed inset-0 bg-slate-900 text-white z-50 flex-col items-center justify-center p-6 text-center">
+    <div class="animate-bounce mb-4 text-indigo-400">
+      <i data-lucide="screen-share" class="h-16 w-16 rotate-90"></i>
+    </div>
+    <h2 class="text-lg font-black tracking-wide">请将手机横屏使用</h2>
+    <p class="text-xs text-slate-400 mt-2">横屏版布局专为手机双手握持优化，分拣效率翻倍！</p>
+  </div>
+
   <!-- 顶部极简导航 -->
-  <header class="flex items-center justify-between px-3 py-2 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20">
+  <header class="flex items-center justify-between px-3 py-1.5 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20">
     <div class="flex items-center space-x-1.5">
       <div class="p-1 bg-indigo-50 rounded text-indigo-600">
-        <i data-lucide="smartphone" class="h-4 w-4"></i>
+        <i data-lucide="smartphone" class="h-3.5 w-3.5"></i>
       </div>
-      <h1 class="text-xs font-black text-slate-900">Log分拣 (手机版)</h1>
+      <h1 class="text-xs font-black text-slate-900">Log分拣 (手机横屏版)</h1>
     </div>
 
     <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple class="hidden" />
@@ -70,15 +86,15 @@
     </div>
   </header>
 
-  <!-- 手机端上下流式布局 -->
-  <main class="flex-1 flex flex-col overflow-hidden p-2 space-y-2">
+  <!-- 手机端横屏左右分栏双翼布局 -->
+  <main class="flex-1 flex overflow-hidden p-2 gap-2">
     
-    <!-- 【上半部分】：待处理队列（大字号，防误触大按钮，显示 6 行） -->
-    <section class="flex-[6] flex flex-col bg-white rounded-xl p-2 shadow-sm overflow-hidden border border-slate-200/60">
+    <!-- 【左侧翼】：待处理队列（大字号，大按钮，显示 10 行） -->
+    <section class="flex-[5.5] flex flex-col bg-white rounded-xl p-2 shadow-sm overflow-hidden border border-slate-200/60">
       <div class="flex items-center justify-between mb-1 shrink-0 px-1">
         <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span> 行)</span>
         <span id="lockTip" class="hidden text-[9px] bg-amber-50 text-orange-600 border border-amber-200 px-1 rounded font-bold animate-pulse">
-          🔒 锁定模式：点击文字直接分流
+          🔒 锁定模式：点击行内文字直接分流
         </span>
       </div>
 
@@ -90,23 +106,23 @@
       </div>
     </section>
 
-    <!-- 【下半部分】：分窗接收区（横向滑屏查看，单手掌控） -->
-    <section class="flex-[4] flex flex-col bg-white rounded-xl p-2 shadow-sm overflow-hidden border border-slate-200/60 shrink-0">
+    <!-- 【右侧翼】：分窗接收区（横向滑屏查看，单手掌控） -->
+    <section class="flex-[4.5] flex flex-col bg-white rounded-xl p-2 shadow-sm overflow-hidden border border-slate-200/60 shrink-0">
       <div class="flex items-center justify-between mb-1 shrink-0 px-1">
-        <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">分流接收窗口 (左右划动查看)</span>
+        <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">分流接收窗口</span>
         <button id="toggleRenameBtn" class="hidden text-[9px] bg-indigo-50 text-indigo-600 rounded border border-indigo-200 px-1.5 py-0.5 font-bold">
           整理发送者
         </button>
       </div>
 
-      <!-- 横向滑屏容器 -->
-      <div id="windowsContainer" class="flex-1 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+      <!-- 横向排布容器 -->
+      <div id="windowsContainer" class="flex-1 flex gap-2 overflow-x-auto pb-1 pr-1">
         <!-- 动态渲染分窗 -->
       </div>
     </section>
 
     <!-- 绝对定位/弹性展开的“重命名面板” -->
-    <div id="renamePanel" class="hidden bg-indigo-50/80 border border-indigo-100 rounded-xl p-2 max-h-[120px] overflow-y-auto shadow-lg">
+    <div id="renamePanel" class="hidden fixed bottom-2 right-2 left-2 bg-indigo-50/95 border border-indigo-100 rounded-xl p-2 max-h-[120px] overflow-y-auto shadow-lg z-30">
       <div id="renameList" class="space-y-1"></div>
     </div>
 
@@ -127,6 +143,9 @@
       { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '张小三', 发送者QQ号: '10001', 消息内容: '帮我看看这个卡怎么建。', _来源: '群聊B' },
       { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '旁观者NPC', 发送者QQ号: '99999', 消息内容: '【系统提示：请遵守群规】', _来源: '群聊B' },
       { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '李大四', 发送者QQ号: '10002', 消息内容: '新人报道，请多多指教~', _来源: '群聊C' },
+      { id: 'mock-6', 时间: '2026-10-04T02:06:10.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '我的角色卡已经做好了，KP看看？', _来源: '群聊A' },
+      { id: 'mock-7', 时间: '2026-10-04T02:07:15.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '属性是：力量 60，敏捷 70，意志 80。', _来源: '群聊A' },
+      { id: 'mock-8', 时间: '2026-10-04T02:08:00.000Z', 发送者: '张三-HO1', 发送者QQ号: '10001', 消息内容: '技能点我全加在侦查和图书馆了。', _来源: '群聊A' },
     ];
 
     let windows = [
@@ -185,7 +204,7 @@
       windows.forEach((win, index) => {
         const isLocked = lockedWindowId === win.id;
         const winEl = document.createElement('div');
-        winEl.className = `flex flex-col w-36 shrink-0 rounded-lg border transition-all ${
+        winEl.className = `flex flex-col w-36 md:w-44 shrink-0 rounded-lg border transition-all ${
           isLocked ? 'border-indigo-600 bg-indigo-50/50 shadow' : `${win.color.border} ${win.color.bg}`
         }`;
 
@@ -199,7 +218,7 @@
               <i data-lucide="download" class="h-3 w-3"></i>
             </button>
           </div>
-          <div id="window-scroll-${win.id}" class="flex-1 p-1 overflow-y-auto space-y-1 max-h-[100px] no-scrollbar">
+          <div id="window-scroll-${win.id}" class="flex-1 p-1 overflow-y-auto space-y-1 max-h-[140px] no-scrollbar">
             ${win.items.length === 0 ? '<div class="text-[8px] text-slate-400 text-center py-4">无数据</div>' : win.items.map(item => `
               <div class="p-1 bg-white rounded border border-slate-200 text-[9px]">
                 <div class="font-bold text-slate-600 truncate">${extractFields(item).displaySender}</div>
@@ -261,12 +280,13 @@
 
       const recommendedWin = getRecommendedWindow();
 
-      for (let i = 0; i < 6; i++) {
+      // 横屏下可以显示 10 行
+      for (let i = 0; i < 10; i++) {
         const item = queue[i];
         const itemEl = document.createElement('div');
         
         if (!item) {
-          itemEl.className = "flex-1 min-h-[44px] border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-300 text-[10px]";
+          itemEl.className = "flex-1 min-h-[38px] border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-300 text-[9px]";
           itemEl.innerText = "(空闲)";
         } else {
           const isFirst = i === 0;
@@ -278,23 +298,23 @@
             const isRec = isFirst && recommendedWin && recommendedWin.id === win.id;
             const shortName = win.name === '水聊' ? '水' : (win.name.startsWith('HO') ? win.name.replace('HO', 'H') : win.name.substring(0, 1));
             buttonsHtml += `
-              <button onclick="sortItemDirectly(event, ${i}, '${win.id}')" class="w-7 h-7 text-[10px] font-black rounded-lg border flex items-center justify-center transition-all active:scale-75 ${
+              <button onclick="sortItemDirectly(event, ${i}, '${win.id}')" class="w-6 h-6 text-[9px] font-black rounded border flex items-center justify-center transition-all active:scale-75 ${
                 isRec ? 'recommend-pulse border-indigo-500' : 'bg-slate-100 border-slate-200 text-slate-700'
               }">${shortName}</button>
             `;
           });
 
-          itemEl.className = `flex-1 min-h-[48px] flex items-center justify-between px-2 py-1 rounded-lg border transition-all ${hoverClass} ${isFirst ? 'ring-1 ring-indigo-200 border-indigo-300' : 'opacity-85'}`;
+          itemEl.className = `flex-1 min-h-[40px] flex items-center justify-between px-2 py-0.5 rounded-lg border transition-all ${hoverClass} ${isFirst ? 'ring-1 ring-indigo-200 border-indigo-300' : 'opacity-85'}`;
           itemEl.onclick = () => handleQueueRowClick(i);
           itemEl.innerHTML = `
             <div class="flex-1 min-w-0 pr-1">
               <div class="flex items-center space-x-1">
-                <span class="text-[9px] font-bold text-slate-400">#${i+1}</span>
-                <span class="text-[11px] font-black text-slate-800 truncate max-w-[70px]">${info.displaySender}</span>
+                <span class="text-[8px] font-bold text-slate-400">#${i+1}</span>
+                <span class="text-[10px] font-black text-slate-800 truncate max-w-[80px]">${info.displaySender}</span>
               </div>
-              <div class="text-xs text-slate-900 font-bold truncate mt-0.5">${info.displayContent}</div>
+              <div class="text-[11px] text-slate-900 font-bold truncate mt-0.5">${info.displayContent}</div>
             </div>
-            <div class="flex items-center space-x-1 shrink-0">
+            <div class="flex items-center space-x-0.5 shrink-0">
               ${buttonsHtml}
             </div>
           `;
@@ -323,9 +343,9 @@
         const row = document.createElement('div');
         row.className = "flex items-center justify-between bg-white p-1 rounded border border-slate-200 text-[10px] gap-1";
         row.innerHTML = `
-          <span class="truncate font-bold text-slate-700 max-w-[100px]">${namesStr}</span>
+          <span class="truncate font-bold text-slate-700 max-w-[120px]">${namesStr}</span>
           <div class="flex items-center space-x-1 shrink-0">
-            <input type="text" placeholder="新名" id="rename-input-${qq}" class="w-14 px-1 py-0.5 border rounded bg-slate-50 text-[9px]" />
+            <input type="text" placeholder="新名" id="rename-input-${qq}" class="w-16 px-1 py-0.5 border rounded bg-slate-50 text-[9px]" />
             <button onclick="applyGlobalRename('${qq}')" class="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-bold">改</button>
             <button onclick="deleteQQRecords('${qq}', '${namesStr}')" class="p-0.5 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="h-3 w-3"></i></button>
           </div>
