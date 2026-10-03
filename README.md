@@ -2,7 +2,7 @@
 
 一个专为 TRPG玩家和 Log 整理创作者设计的**快速分拣与合并工具**。支持多群聊、多文件并行合并，通过键盘快捷键或丝滑的拖拽交互，将混乱的原始聊天记录快速分流整理。（本工具为vebcoding产物。）
 
-**在线使用地址**：[点击访问你的 GitHub Pages 网址](https://lcmdyc.github.io/trpg-log-sorter/)
+**在线使用地址**：[点击访问工具网址](https://lcmdyc.github.io/trpg-log-sorter/)
 
 ---
 
