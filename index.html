@@ -10,6 +10,35 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- SheetJS (XLSX) CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    /* 拖拽悬停窗口样式 */
+    .window-drag-over {
+      background-color: rgba(99, 102, 241, 0.05) !important;
+      border-color: rgba(99, 102, 241, 0.8) !important;
+      border-style: dashed !important;
+    }
+    
+    /* 隐形占位热区：默认高度 12px，提供宽阔的鼠标判定范围 */
+    .drop-indicator {
+      height: 12px;
+      margin-top: -6px;
+      margin-bottom: -6px;
+      transition: all 0.2s ease-out;
+      position: relative;
+      z-index: 10;
+      border-radius: 8px;
+      background-color: transparent;
+    }
+
+    /* 拖拽悬停时，热区平滑撑开，并显示虚线框引导放入 */
+    .drop-indicator.active {
+      height: 76px; /* 撑开高度等同于卡片高度 */
+      margin-top: 4px;
+      margin-bottom: 4px;
+      background-color: rgba(99, 102, 241, 0.04);
+      border: 2px dashed rgba(99, 102, 241, 0.4);
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans h-screen overflow-hidden flex flex-col">
 
@@ -64,7 +93,7 @@
       <div class="flex items-center justify-between mb-3 shrink-0">
         <div class="flex items-center space-x-2">
           <span class="flex h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
-          <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">分流接收窗口 (横向排布)</h2>
+          <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">分流接收窗口 (横向排布 · 支持鼠标左键拖拽卡片调整/跨窗)</h2>
         </div>
         <button id="addWindowBtn" class="flex items-center space-x-1 px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 text-indigo-600 rounded-md border border-slate-200 transition font-medium">
           <i data-lucide="plus" class="h-3.5 w-3.5"></i>
@@ -117,7 +146,7 @@
         <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
           <i data-lucide="upload" class="h-8 w-8 mb-1 text-indigo-500/60 animate-bounce"></i>
           <p class="text-xs font-medium text-slate-600">请在右上角上传您的 .xlsx 或 .csv 表格</p>
-          <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，系统将严格读取“时间”、“发送者”、“消息内容”列进行排序和展示</p>
+          <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，系统将严格读取“时间”、“发送者”、“消息内容”列进行排序 and 展示</p>
         </div>
       </div>
     </section>
@@ -134,13 +163,13 @@
       { border: 'border-cyan-200', bg: 'bg-cyan-50/60', text: 'text-cyan-600', btn: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-cyan-100' },
     ];
 
-    // 模拟包含大量无关列的测试数据
+    // 模拟日常打招呼与跑团闲聊测试数据
     const MOCK_COMPLEX_DATA = [
-      { id: 'mock-1', 时间: '2026-09-30T16:18:14.000Z', 发送者: '张三', 消息内容: '请问这个产品怎么收费？', 消息类型: '业务咨询', 地区: '北京', 状态: '未处理' },
-      { id: 'mock-2', 时间: '2026-09-30T16:19:05.000Z', 发送者: '李四', 消息内容: '登录时系统提示500错误。', 消息类型: '技术报错', 地区: '上海', 状态: '处理中' },
-      { id: 'mock-3', 时间: '2026-09-30T16:20:30.000Z', 发送者: '王五', 消息内容: '客服响应速度有点慢，建议改进。', 消息类型: '投诉建议', 地区: '广州', 状态: '已记录' },
-      { id: 'mock-4', 时间: '2026-09-30T16:21:45.000Z', 发送者: '赵六', 消息内容: '想要申请企业版试用。', 消息类型: '业务咨询', 地区: '深圳', 状态: '已发送' },
-      { id: 'mock-5', 时间: '2026-09-30T16:23:00.000Z', 发送者: '钱七', 消息内容: '昨天的订单需要开专票。', 消息类型: '财务开票', 地区: '杭州', 状态: '待开票' },
+      { id: 'mock-1', 时间: '2026-10-04T02:01:10.000Z', 发送者: '张三', 消息内容: '哈喽哈喽，大家早上好呀！', 消息类型: '日常闲聊', 地区: '北京', 状态: '在线', _来源: '群聊A' },
+      { id: 'mock-2', 时间: '2026-10-04T02:02:15.000Z', 发送者: '李四', 消息内容: '早！今天晚上有人开团吗？求带！', 消息类型: '跑团招募', 地区: '上海', 状态: '在线', _来源: '群聊A' },
+      { id: 'mock-3', 时间: '2026-10-04T02:03:00.000Z', 发送者: '王五', 消息内容: '滴滴，有人在吗？帮我看看这个卡怎么建。', 消息类型: '车卡咨询', 地区: '广州', 状态: '忙碌', _来源: '群聊B' },
+      { id: 'mock-4', 时间: '2026-10-04T02:04:22.000Z', 发送者: '赵六', 消息内容: '来了来了！今天我随时有空。', 消息类型: '日常闲聊', 地区: '深圳', 状态: '在线', _来源: '群聊B' },
+      { id: 'mock-5', 时间: '2026-10-04T02:05:40.000Z', 发送者: '钱七', 消息内容: '新人报道，请多多指教~', 消息类型: '日常闲聊', 地区: '杭州', 状态: '在线', _来源: '群聊C' },
     ];
 
     // 状态管理：默认分类为 HO1, HO2, HO3, HO4, 水聊
@@ -155,6 +184,23 @@
     let isLoaded = false;
     let originalHeaders = new Set(); // 收集所有上传表格合并后的并集表头
 
+    // 拖拽状态追踪
+    let draggedItemId = null;
+    let draggedSourceWindowId = null;
+
+    // 智能提取文件名中的群组标记
+    function extractGroupName(filename) {
+      if (!filename) return '未知来源';
+      if (filename.startsWith('group_')) {
+        const parts = filename.split('_');
+        if (parts.length > 1 && parts[1]) {
+          return parts[1]; // 提取 group_ 之后，下一个 _ 之前的内容
+        }
+      }
+      const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;
+      return nameWithoutExt.length > 8 ? nameWithoutExt.substring(0, 8) + '...' : nameWithoutExt;
+    }
+
     // 严格提取 [时间 | 发送者 | 消息内容]
     function extractFields(row) {
       return {
@@ -163,12 +209,6 @@
         displayContent: row['消息内容'] || '（无消息内容）',
         rawTimeValue: row['时间'] ? new Date(row['时间']).getTime() : 0
       };
-    }
-
-    function formatFullDateTime(isoString) {
-      if (!isoString) return '';
-      if (typeof isoString !== 'string') return String(isoString);
-      return isoString.includes('T') ? isoString.replace('T', ' ').split('.')[0].replace('Z', '') : isoString;
     }
 
     function formatOnlyTime(isoString) {
@@ -192,8 +232,22 @@
 
       windows.forEach((win, index) => {
         const winEl = document.createElement('div');
-        winEl.className = `flex flex-col w-56 shrink-0 rounded-xl border-2 ${win.color.border} ${win.color.bg} shadow-sm overflow-hidden transition-all`;
+        winEl.className = `flex flex-col w-56 shrink-0 rounded-xl border-2 ${win.color.border} ${win.color.bg} shadow-sm overflow-hidden transition-all duration-200`;
         
+        // 绑定窗口的拖拽目标事件
+        winEl.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          winEl.classList.add('window-drag-over');
+        });
+        winEl.addEventListener('dragleave', () => {
+          winEl.classList.remove('window-drag-over');
+        });
+        winEl.addEventListener('drop', (e) => {
+          e.preventDefault();
+          winEl.classList.remove('window-drag-over');
+          handleCardDrop(win.id, null); // 拖拽到窗口空白处，追加到末尾
+        });
+
         let itemsHtml = '';
         if (win.items.length === 0) {
           itemsHtml = `
@@ -203,22 +257,54 @@
             </div>
           `;
         } else {
-          win.items.forEach(item => {
+          // 渲染列表，并在每张卡片上方渲染一个“隐形占位热区”
+          win.items.forEach((item, itemIdx) => {
             const info = extractFields(item);
+            const sourceLabel = item._来源 || '未知';
+            
+            // 1. 隐形判定热区
             itemsHtml += `
-              <div class="p-2 bg-white rounded-lg border border-slate-200/80 hover:border-slate-300 hover:shadow-sm transition">
-                <div class="flex justify-between text-[9px] text-slate-400 mb-0.5">
-                  <span class="font-medium text-slate-500">${info.displaySender}</span>
+              <div 
+                class="drop-indicator"
+                ondragover="handleIndicatorDragOver(event, this)"
+                ondragleave="handleIndicatorDragLeave(this)"
+                ondrop="handleIndicatorDrop(event, '${win.id}', ${itemIdx}, this)"
+              ></div>
+            `;
+
+            // 2. 实际卡片
+            itemsHtml += `
+              <div 
+                draggable="true"
+                ondragstart="handleCardDragStart(event, '${item.id}', '${win.id}')"
+                ondragend="handleCardDragEnd(event)"
+                class="p-2 bg-white rounded-lg border border-slate-200/80 hover:border-slate-300 hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing"
+              >
+                <div class="flex justify-between text-[9px] text-slate-400 mb-0.5 pointer-events-none">
+                  <span class="font-bold text-slate-600 truncate max-w-[80px]" title="${info.displaySender}">${info.displaySender}</span>
                   <span class="font-mono">${formatOnlyTime(info.displayTime)}</span>
                 </div>
-                <div class="font-semibold text-[11px] text-slate-700 truncate" title="${info.displayContent}">${info.displayContent}</div>
+                <div class="font-semibold text-[11px] text-slate-700 truncate mb-1 pointer-events-none" title="${info.displayContent}">${info.displayContent}</div>
+                <div class="text-[8px] text-indigo-500 bg-indigo-50/50 px-1 py-0.2 rounded border border-indigo-100/50 inline-block truncate max-w-full pointer-events-none">
+                  ${sourceLabel}
+                </div>
               </div>
             `;
           });
+
+          // 列表最底部再追加一个隐形热区，方便拖拽到最后一行下方
+          itemsHtml += `
+            <div 
+              class="drop-indicator"
+              ondragover="handleIndicatorDragOver(event, this)"
+              ondragleave="handleIndicatorDragLeave(this)"
+              ondrop="handleIndicatorDrop(event, '${win.id}', ${win.items.length}, this)"
+            ></div>
+          `;
         }
 
         winEl.innerHTML = `
-          <div class="px-3 py-2 flex items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-sm">
+          <div class="px-3 py-2 flex items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-sm shrink-0">
             <div class="flex items-center space-x-1.5">
               <span class="flex items-center justify-center w-4 h-4 rounded bg-slate-200 text-slate-600 text-[10px] font-bold">
                 ${index + 1}
@@ -230,7 +316,7 @@
                 class="bg-transparent font-bold text-xs text-slate-800 focus:outline-none focus:bg-slate-50 rounded px-1 py-0.5 w-24 border border-transparent hover:border-slate-200"
               />
             </div>
-            <div class="flex items-center space-x-0.5">
+            <div class="flex-center space-x-0.5">
               <button onclick="exportWindow('${win.id}')" title="导出此窗口数据 (保留完整原始列)" class="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-emerald-600 transition">
                 <i data-lucide="download" class="h-3 w-3"></i>
               </button>
@@ -239,10 +325,10 @@
               </button>
             </div>
           </div>
-          <div class="flex-1 p-2.5 overflow-y-auto space-y-2">
+          <div class="flex-1 p-2.5 overflow-y-auto space-y-1">
             ${itemsHtml}
           </div>
-          <div class="px-3 py-1.5 bg-white/80 text-[10px] text-slate-500 flex justify-between border-t border-slate-200/60">
+          <div class="px-3 py-1.5 bg-white/80 text-[10px] text-slate-500 flex justify-between border-t border-slate-200/60 shrink-0">
             <span>已收集</span>
             <span class="font-bold ${win.color.text}">${win.items.length} 行</span>
           </div>
@@ -251,7 +337,73 @@
       });
     }
 
-    // 渲染待处理队列
+    // 拖拽开始与结束
+    window.handleCardDragStart = function(e, itemId, sourceWinId) {
+      draggedItemId = itemId;
+      draggedSourceWindowId = sourceWinId;
+      e.dataTransfer.effectAllowed = 'move';
+      // 拖拽时让卡片变透明
+      setTimeout(() => {
+        e.target.classList.add('opacity-30');
+      }, 0);
+    };
+
+    window.handleCardDragEnd = function(e) {
+      e.target.classList.remove('opacity-30');
+    };
+
+    // 隐形占位判定区的拖拽事件
+    window.handleIndicatorDragOver = function(e, indicator) {
+      e.preventDefault();
+      e.stopPropagation();
+      indicator.classList.add('active'); // 撑开高度，显示虚线框
+    };
+
+    window.handleIndicatorDragLeave = function(indicator) {
+      indicator.classList.remove('active'); // 恢复原样
+    };
+
+    window.handleIndicatorDrop = function(e, targetWinId, targetIdx, indicator) {
+      e.preventDefault();
+      e.stopPropagation();
+      indicator.classList.remove('active');
+      handleCardDrop(targetWinId, targetIdx);
+    };
+
+    // 统一的拖放逻辑处理
+    function handleCardDrop(targetWinId, targetIdx) {
+      if (!draggedItemId || !draggedSourceWindowId) return;
+
+      const sourceWin = windows.find(w => w.id === draggedSourceWindowId);
+      const targetWin = windows.find(w => w.id === targetWinId);
+      if (!sourceWin || !targetWin) return;
+
+      // 找到被拖拽的元素索引
+      const itemIdx = sourceWin.items.findIndex(item => item.id === draggedItemId);
+      if (itemIdx === -1) return;
+
+      // 移除原位置元素
+      const [draggedItem] = sourceWin.items.splice(itemIdx, 1);
+
+      // 插入到新位置
+      if (targetIdx === null) {
+        targetWin.items.push(draggedItem); // 追加入末尾
+      } else {
+        // 如果是在同一个窗口内向下拖拽，且目标索引大于原索引，需要修正索引偏移
+        let adjustedIdx = targetIdx;
+        if (draggedSourceWindowId === targetWinId && targetIdx > itemIdx) {
+          adjustedIdx = targetIdx - 1;
+        }
+        targetWin.items.splice(adjustedIdx, 0, draggedItem);
+      }
+
+      // 清空状态并重绘
+      draggedItemId = null;
+      draggedSourceWindowId = null;
+      renderAll();
+    }
+
+    // 渲染待处理队列 (精简版：移除冗长的时间水印列)
     function renderQueue() {
       document.getElementById('queueCount').innerText = queue.length;
       const listContainer = document.getElementById('queueList');
@@ -262,7 +414,7 @@
           <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
             <i data-lucide="upload" class="h-8 w-8 mb-1 text-indigo-500/60 animate-bounce"></i>
             <p class="text-xs font-medium text-slate-600">请在右上角上传您的 .xlsx 或 .csv 表格</p>
-            <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，系统将严格读取“时间”、“发送者”、“消息内容”列进行排序和展示</p>
+            <p class="text-[10px] text-slate-400 mt-1">支持多文件合并，系统将严格读取“时间”、“发送者”、“消息内容”列进行排序 and 展示</p>
           </div>
         `;
         document.getElementById('headerInfo').classList.add('hidden');
@@ -285,9 +437,10 @@
       // 显示首行指示器
       document.getElementById('sortingIndicator').classList.remove('hidden');
       const firstInfo = extractFields(queue[0]);
-      document.getElementById('indicatorText').innerText = `当前待分拣: ${firstInfo.displaySender} - ${firstInfo.displayContent}`;
+      const firstSource = queue[0]._来源 || '未知';
+      document.getElementById('indicatorText').innerText = `当前待分拣: [${firstSource}] ${firstInfo.displaySender} - ${firstInfo.displayContent}`;
 
-      // 渲染前5行
+      // 渲染前5行 (精简版：仅保留 序号、来源、发送者、消息内容)
       for (let i = 0; i < 5; i++) {
         const item = queue[i];
         const itemEl = document.createElement('div');
@@ -298,38 +451,46 @@
         } else {
           const isFirst = i === 0;
           const info = extractFields(item);
+          const sourceLabel = item._来源 || '未知';
 
-          itemEl.className = `flex-1 flex items-center justify-between px-4 py-1 rounded-lg border transition-all ${
+          itemEl.className = `flex-1 flex items-center justify-between px-4 py-1.5 rounded-lg border transition-all ${
             isFirst 
               ? 'bg-white border-indigo-300 shadow-sm ring-1 ring-indigo-100' 
               : 'bg-white/60 border-slate-200/60 opacity-50'
           }`;
 
           itemEl.innerHTML = `
-            <div class="flex items-center space-x-3">
-              <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+            <div class="flex items-center space-x-3 w-16 shrink-0">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
                 isFirst ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
               }">
                 ${i + 1}
               </span>
-              <div>
-                <div class="text-[8px] text-slate-400 uppercase tracking-wider">时间</div>
-                <div class="font-mono text-xs font-medium ${isFirst ? 'text-indigo-600' : 'text-slate-500'}">
-                  ${formatFullDateTime(info.displayTime)}
-                </div>
+            </div>
+            
+            <!-- 来源标记列 -->
+            <div class="w-32 shrink-0">
+              <div class="text-[8px] text-slate-400 uppercase tracking-wider">来源</div>
+              <div class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 inline-block truncate max-w-[110px]" title="${sourceLabel}">
+                ${sourceLabel}
               </div>
             </div>
-            <div class="w-32">
+
+            <!-- 发送者列 (加粗显眼) -->
+            <div class="w-40 shrink-0">
               <div class="text-[8px] text-slate-400 uppercase tracking-wider">发送者</div>
-              <div class="text-xs font-bold text-slate-700">${info.displaySender}</div>
+              <div class="text-sm font-black text-slate-800 truncate" title="${info.displaySender}">${info.displaySender}</div>
             </div>
-            <div class="flex-1 max-w-xs">
+
+            <!-- 消息内容列 (最显眼) -->
+            <div class="flex-1 min-w-0 mr-4">
               <div class="text-[8px] text-slate-400 uppercase tracking-wider">消息内容</div>
-              <div class="text-xs text-slate-600 truncate font-semibold" title="${info.displayContent}">${info.displayContent}</div>
+              <div class="text-sm text-slate-900 font-bold truncate" title="${info.displayContent}">${info.displayContent}</div>
             </div>
+
             ${isFirst ? `
-              <span class="px-2 py-0.5 text-[9px] bg-indigo-50 text-indigo-600 border border-indigo-100 rounded font-medium animate-pulse">
-                待分拣 (按 1)
+              <span class="px-2.5 py-1 text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-100 rounded font-bold animate-pulse shrink-0">
+                待分拣 (按键盘 ${1})
               </span>
             ` : ''}
           `;
@@ -457,7 +618,7 @@
             const worksheet = workbook.Sheets[firstSheetName];
             
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-            resolve(jsonData);
+            resolve({ data: jsonData, filename: file.name });
           } catch (err) {
             reject(err);
           }
@@ -465,7 +626,7 @@
         reader.onerror = (err) => reject(err);
         reader.readAsArrayBuffer(file);
       });
-    }
+    };
 
     // 处理多文件上传与追加 (采用 Promise.all 完美同步化)
     async function processFiles(files) {
@@ -478,16 +639,22 @@
         const newRows = [];
         
         // 2. 遍历解析后的数据
-        filesDataArray.forEach((jsonData, fileIndex) => {
+        filesDataArray.forEach((fileResult, fileIndex) => {
+          const jsonData = fileResult.data;
+          const filename = fileResult.filename;
+          const groupMark = extractGroupName(filename); // 提取来源标记
+
           if (jsonData.length > 0) {
             // 收集表头并集
             Object.keys(jsonData[0]).forEach(h => {
-              if (h !== 'id') originalHeaders.add(h);
+              if (h !== 'id' && h !== '_来源') originalHeaders.add(h);
             });
+            originalHeaders.add('_来源'); // 确保导出时包含“_来源”列
 
             // 压入行数据并打上唯一ID防冲突
             jsonData.forEach((row, idx) => {
               row.id = `row-${Date.now()}-${fileIndex}-${idx}`;
+              row._来源 = groupMark; // 写入来源标记
               newRows.push(row);
             });
           }
