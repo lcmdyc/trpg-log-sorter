@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>跑团log分拣整理系统</title>
+  <!-- 智能分流脚本：如果是手机访问，自动跳转到 mobile.html -->
+  <script>
+    if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+      window.location.href = "mobile.html";
+    }
+  </script>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
@@ -103,7 +109,7 @@
   <!-- 主体工作区 -->
   <main class="flex-1 flex flex-col lg:flex-row overflow-hidden p-3 md:p-4 gap-3 md:gap-4">
     
-    <!-- 【左侧栏】：待处理队列（占据 48%，集成行内分流按钮） -->
+    <!-- 【左侧栏】：待处理队列（占据 55%，集成行内分流按钮） -->
     <section class="flex-[5.5] flex flex-col bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-sm overflow-hidden min-h-[350px] lg:min-h-0">
       <div class="flex items-center justify-between mb-2 shrink-0">
         <div class="flex items-center space-x-2">
@@ -128,7 +134,7 @@
       </div>
     </section>
 
-    <!-- 【右侧栏】：分窗接收区 & 改名面板（占据 4.5%） -->
+    <!-- 【右侧栏】：分窗接收区 & 改名面板（占据 45%） -->
     <section class="flex-[4.5] flex flex-col gap-3 md:gap-4 overflow-hidden">
       
       <!-- 1. 分窗接收区 -->
@@ -554,7 +560,6 @@
           let rowButtonsHtml = '';
           windows.forEach((win, winIdx) => {
             const isRec = isFirst && recommendedWin && recommendedWin.id === win.id;
-            // 缩写名字，如果是水聊用“水”，HO1用“H1”，其他取前两个字符
             const shortName = win.name === '水聊' ? '水' : (win.name.startsWith('HO') ? win.name.replace('HO', 'H') : win.name.substring(0, 2));
             
             rowButtonsHtml += `
