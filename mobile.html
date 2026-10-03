@@ -2,7 +2,14 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <!-- 优化移动端视口，防止缩放，适配刘海屏 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
+  <!-- 开启 iOS 与 Android WebApp 全屏模式 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  
   <title>跑团log分拣系统 (手机横屏版)</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -62,7 +69,13 @@
 
     <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple class="hidden" />
 
+    <!-- 右侧控制区：新增全屏切换按钮 -->
     <div class="flex items-center space-x-1">
+      <button id="fullscreenBtn" onclick="toggleFullscreen()" class="flex items-center space-x-0.5 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 shadow-sm mr-1">
+        <i data-lucide="maximize" class="h-3 w-3" id="fullscreenIcon"></i>
+        <span id="fullscreenText">全屏</span>
+      </button>
+
       <div id="actionButtons" class="flex items-center space-x-1">
         <button id="uploadBtn" class="flex items-center space-x-0.5 px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm">
           <i data-lucide="upload" class="h-3 w-3"></i>
@@ -162,6 +175,25 @@
     let lockedWindowId = null;
     let qqToWindowMapping = {};
     let actionHistory = [];
+
+    // 全屏切换逻辑
+    window.toggleFullscreen = function() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          document.getElementById('fullscreenText').innerText = "退出";
+          document.getElementById('fullscreenIcon').setAttribute('data-lucide', 'minimize');
+          lucide.createIcons();
+        }).catch(err => {
+          alert(`无法进入全屏: ${err.message}`);
+        });
+      } else {
+        document.exitFullscreen().then(() => {
+          document.getElementById('fullscreenText').innerText = "全屏";
+          document.getElementById('fullscreenIcon').setAttribute('data-lucide', 'maximize');
+          lucide.createIcons();
+        });
+      }
+    };
 
     function extractGroupName(filename) {
       if (!filename) return '未知';
@@ -280,7 +312,6 @@
 
       const recommendedWin = getRecommendedWindow();
 
-      // 横屏下可以显示 10 行
       for (let i = 0; i < 10; i++) {
         const item = queue[i];
         const itemEl = document.createElement('div');
