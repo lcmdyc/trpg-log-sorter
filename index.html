@@ -28,14 +28,14 @@
       </div>
       <div>
         <h1 class="text-sm md:text-base font-bold text-slate-900">跑团log分拣系统</h1>
-        <p class="hidden md:block text-[10px] text-slate-400">支持多工作表进度续传 · 队列自由拖拽 · 单条极速删除 v2.2.4</p>
+        <p class="hidden md:block text-[10px] text-slate-400">滑动窗口极速渲染 · 支持多工作表进度续传 · 队列自由拖拽 · v2.2.5</p>
       </div>
     </div>
 
     <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar">
       <div class="hidden lg:flex items-center space-x-1 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200">
         <i data-lucide="keyboard" class="h-3.5 w-3.5 text-indigo-500"></i>
-        <span>按 <b>0-9</b> 分拣，按 <b>Enter</b> 确认预判，按 <b>.</b> 撤回</span>
+        <span>按 <b>0-9</b> 分拣首行，按 <b>Enter</b> 确认预判，按 <b>.</b> 撤回</span>
       </div>
       <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" multiple class="hidden" />
       <div id="actionButtons" class="flex items-center space-x-1.5 shrink-0">
@@ -71,7 +71,7 @@
       <div class="flex items-center justify-between mb-2 shrink-0">
         <div class="flex items-center space-x-2">
           <span class="flex h-2 w-2 rounded-full bg-slate-400"></span>
-          <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">待处理队列 (<span id="queueCount">0</span> 行)</h2>
+          <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">待处理队列 (共 <span id="queueCount">0</span> 行)</h2>
           <span id="lockTip" class="hidden text-[10px] bg-amber-50 text-orange-600 border border-amber-200 px-1.5 py-0.2 rounded font-bold animate-pulse">🔒 锁定模式：点击卡片空白直接归位</span>
         </div>
         <div class="flex items-center space-x-1.5">
@@ -351,6 +351,7 @@
       renderAll();
     }
 
+    // 【滑动渲染窗口】：仅渲染队列前 50 条，彻底消除 PC 端长列表重绘卡顿
     function renderQueue() {
       document.getElementById('queueCount').innerText = queue.length;
       const listContainer = document.getElementById('queueList');
@@ -370,7 +371,11 @@
 
       const recommendedWin = getRecommendedWindow();
       const queueHtmlArr = [];
-      queue.forEach((item, i) => {
+      
+      // 关键性能优化：只截取前 50 条进行渲染
+      const visibleQueue = queue.slice(0, 50);
+
+      visibleQueue.forEach((item, i) => {
         const isFirst = i === 0;
         const info = extractFields(item);
         const sourceLabel = item._来源 || '未知';
@@ -410,8 +415,18 @@
       });
 
       if (!lockedWindowId) {
-        queueHtmlArr.push(`<div class="drop-indicator" ondragover="handleIndicatorDragOver(event, this)" ondragleave="handleIndicatorDragLeave(this)" ondrop="handleIndicatorDrop(event, 'queue', ${queue.length}, this)"></div>`);
+        queueHtmlArr.push(`<div class="drop-indicator" ondragover="handleIndicatorDragOver(event, this)" ondragleave="handleIndicatorDragLeave(this)" ondrop="handleIndicatorDrop(event, 'queue', ${visibleQueue.length}, this)"></div>`);
       }
+
+      // 如果还有剩余未渲染的行，在底部显示一个轻量级提示
+      if (queue.length > 50) {
+        queueHtmlArr.push(`
+          <div class="py-3 text-center text-xs text-slate-400 font-medium bg-slate-100/50 rounded-xl border border-dashed border-slate-200">
+            💡 仅展示前 50 条发言，剩余 <span class="font-bold text-indigo-600">${queue.length - 50}</span> 条已自动隐藏（分流后自动补充补位）
+          </div>
+        `);
+      }
+
       listContainer.innerHTML = queueHtmlArr.join('');
     }
 
@@ -480,7 +495,7 @@
         row.innerHTML = `
           <div class="flex-1 min-w-0"><div class="flex items-center space-x-1"><span class="text-[9px] font-mono text-indigo-600 bg-indigo-50 px-1 rounded">QQ: ${qq}</span><span class="text-[10px] font-bold text-slate-700 truncate">${namesStr}</span></div></div>
           <div class="flex items-center space-x-1 shrink-0">
-            <input type="text" placeholder="新名字" id="rename-input-${qq}" onfocus="highlightRenameRow('${qq}', true)'" onblur="highlightRenameRow('${qq}', false)'" class="w-16 md:w-28 text-[10px] px-1.5 py-0.5 border border-slate-200 rounded" />
+            <input type="text" placeholder="新名字" id="rename-input-${qq}" onfocus="highlightRenameRow('${qq}', true)" onblur="highlightRenameRow('${qq}', false)" class="w-16 md:w-28 text-[10px] px-1.5 py-0.5 border border-slate-200 rounded" />
             <button onclick="applyGlobalRename('${qq}')" class="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-bold">改名</button>
             <button onclick="deleteQQRecords('${qq}', '${namesStr}')" class="p-1 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i></button>
           </div>
@@ -536,6 +551,13 @@
       scrollWindowToBottom(windowId);
     }
 
+    function scrollWindowToBottom(windowId) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`window-scroll-${windowId}`);
+        if (el) { el.scrollTop = el.scrollHeight; }
+      });
+    }
+
     function pushAction(action) { actionHistory.push(action); updateUndoButtonState(); }
     function updateUndoButtonState() {
       const btn = document.getElementById('undoBtn');
@@ -580,6 +602,19 @@
     };
 
     document.getElementById('undoBtn').onclick = () => triggerUndo();
+    window.toggleLockWindow = function(winId, checked) {
+      if (checked) {
+        lockedWindowId = winId;
+        document.getElementById('lockTip').classList.remove('hidden');
+      } else {
+        if (lockedWindowId === winId) {
+          lockedWindowId = null;
+          document.getElementById('lockTip').classList.add('hidden');
+        }
+      }
+      renderAll();
+    };
+
     function renameWindow(id, newName) { const win = windows.find(w => w.id === id); if (win) win.name = newName; renderAll(); }
     function removeWindow(id) {
       const win = windows.find(w => w.id === id);
